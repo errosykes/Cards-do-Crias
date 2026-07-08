@@ -1,0 +1,35 @@
+{
+  "collections": [
+    {
+      "name": "users",
+      "rules": [
+        { "action": "read", "condition": "request.auth != null" },
+        { "action": "create", "condition": "request.auth != null && request.auth.uid == document" },
+        { "action": "update", "condition": "request.auth != null && (request.auth.uid == document || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.token.email == 'adm@admin.com' || request.auth.token.email == 'errosykes@gmail.com')" },
+        { "action": "delete", "condition": "request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.token.email == 'adm@admin.com' || request.auth.token.email == 'errosykes@gmail.com')" }
+      ]
+    },
+    {
+      "name": "cards",
+      "rules": [
+        { "action": "read", "condition": "request.auth != null" },
+        { "action": "write", "condition": "request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.token.email == 'adm@admin.com' || request.auth.token.email == 'errosykes@gmail.com')" }
+      ]
+    },
+    {
+      "name": "games",
+      "rules": [
+        { "action": "read", "condition": "request.auth != null" },
+        { "action": "write", "condition": "request.auth != null" },
+        { "action": "delete", "condition": "request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || request.auth.token.email == 'adm@admin.com' || request.auth.token.email == 'errosykes@gmail.com')" }
+      ]
+    },
+    {
+      "name": "system",
+      "rules": [
+        { "action": "read", "condition": "true" },
+        { "action": "write", "condition": "true" }
+      ]
+    }
+  ]
+}
