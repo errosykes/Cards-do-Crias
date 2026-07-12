@@ -123,7 +123,7 @@ export default function Store() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0e0c] text-[#d4c3a1] font-serif flex flex-col">
+    <div className="h-full bg-[#0f0e0c] text-[#d4c3a1] font-serif flex flex-col overflow-y-auto overflow-x-hidden w-full">
       <div className="p-4 md:p-8 flex flex-col md:flex-row justify-between items-center bg-[#141210] border-b border-[#3d3326] shadow-2xl relative z-10">
         <div className="flex items-center gap-4">
           <button 

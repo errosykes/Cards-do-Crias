@@ -169,7 +169,7 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 font-sans h-full overflow-y-auto">
+    <div className="max-w-7xl mx-auto p-4 md:p-6 font-sans h-full overflow-y-auto overflow-x-hidden w-full">
       <div className="flex items-center gap-4 mb-8">
         <Link to="/" className="p-2 bg-[#1a1814] rounded border border-[#3d3326] hover:bg-[#3d3326] text-[#a67c52] transition-colors">
           <ArrowLeft className="w-5 h-5" />

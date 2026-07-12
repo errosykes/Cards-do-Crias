@@ -29,7 +29,7 @@ export default function App() {
     <AuthProvider>
       <AudioProvider>
       <Router>
-        <div className="h-full min-h-screen bg-[#0f0e0c] text-[#d4c3a1] font-serif selection:bg-[#a67c52]/30 flex flex-col flex-1 overflow-auto">
+        <div className="h-screen h-[100dvh] bg-[#0f0e0c] text-[#d4c3a1] font-serif selection:bg-[#a67c52]/30 flex flex-col flex-1 overflow-hidden">
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

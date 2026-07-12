@@ -65,7 +65,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f0e0c] p-4 font-serif">
+    <div className="h-full flex items-center justify-center bg-[#0f0e0c] p-4 font-serif overflow-y-auto">
       <div className="w-full max-w-md bg-[#1a1814] border border-[#3d3326] rounded-xl p-8 shadow-2xl relative">
         {!isMasterLogin && (
           <button 

@@ -1538,7 +1538,7 @@ export default function GameBoard() {
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
           onClick={onClick}
           className={cn(
-            `relative ${location === 'hand' ? 'w-20 h-28 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
+            `relative ${location === 'hand' ? 'w-16 h-24 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
             onClick && "cursor-pointer hover:border-[#e2b17a] hover:shadow-[0_0_15px_rgba(226,177,122,0.5)] transition-colors duration-300"
           )}
         >
@@ -1570,7 +1570,7 @@ export default function GameBoard() {
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       onClick={onClick}
       className={cn(
-        `relative ${location === 'hand' ? 'w-20 h-28 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
+        `relative ${location === 'hand' ? 'w-16 h-24 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
         onClick && "cursor-pointer hover:border-[#e2b17a] hover:shadow-[0_0_15px_rgba(226,177,122,0.5)] transition-colors duration-300"
       )}
     >
@@ -1663,25 +1663,25 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
         
         {/* Left Sidebar (Game Info & Pass) */}
-        <div className="w-full md:w-64 bg-[#141210] flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[#3d3326] shadow-2xl z-10 shrink-0">
+        <div className="w-full md:w-64 bg-[#141210] flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[#3d3326] shadow-2xl z-10 shrink-0 overflow-y-auto max-h-32 md:max-h-none">
            {/* Top Actions */}
-           <div className="p-2 md:p-4 border-r md:border-r-0 md:border-b border-[#3d3326] flex flex-col items-center justify-center shrink-0 w-24 md:w-auto gap-2">
+           <div className="p-2 md:p-4 border-r md:border-r-0 md:border-b border-[#3d3326] flex flex-col items-center justify-center shrink-0 w-16 md:w-auto gap-1 md:gap-2">
               <div className="flex flex-col md:flex-row flex-wrap items-center justify-center gap-2 w-full">
               <button onClick={() => { navigate('/'); }} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-red-900/30 hover:bg-red-800 rounded flex items-center justify-center transition-colors w-full md:w-auto">
                  <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
-                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Sair</span>
+                 <span className="hidden md:inline text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Sair</span>
               </button>
               <button onClick={() => setShowAudioSettings(true)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto">
                  <Volume2 className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
-                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Áudio</span>
+                 <span className="hidden md:inline text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Áudio</span>
               </button>
               <button onClick={() => setIsLogOpen(!isLogOpen)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto relative">
                  <List className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/>
-                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Registro</span>
+                 <span className="hidden md:inline text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Registro</span>
               </button>
               <button onClick={() => setIsChatOpen(!isChatOpen)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto relative">
                  <MessageSquare className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
-                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Chat</span>
+                 <span className="hidden md:inline text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Chat</span>
                  {gameState.chatMessages && gameState.chatMessages.length > 0 && !isChatOpen && (
                     <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
                       {gameState.chatMessages.length}
@@ -1703,7 +1703,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
            </div>
 
           {/* Opponent Info */}
-          <div className="p-2 md:p-6 border-r md:border-r-0 md:border-b border-[#3d3326] bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="p-1 md:p-6 border-r md:border-r-0 md:border-b border-[#3d3326] bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden text-center">
             {opponent?.profile?.coverUrl && (
               <img src={opponent.profile.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-20 z-0" />
             )}
@@ -1715,7 +1715,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               
               <div className="flex flex-col items-center gap-2">
                 {opponent?.profile?.avatarUrl && (
-                  <img src={opponent.profile.avatarUrl} alt="Avatar" className="w-6 h-6 md:w-10 md:h-10 rounded-full border border-[#3d3326] object-cover" />
+                  <img src={opponent.profile.avatarUrl} alt="Avatar" className="w-5 h-5 md:w-10 md:h-10 rounded-full border border-[#3d3326] object-cover" />
                 )}
                 <h3 
                   className={cn("text-xs uppercase tracking-widest font-bold", opponent?.profile?.font || "font-sans")} 
@@ -1725,7 +1725,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                 </h3>
               </div>
             </div>
-            <div className="text-3xl md:text-5xl font-black md:mt-2 text-[#d4c3a1] relative z-10">{calculateScore(opponent!, me!)}</div>
+            <div className="text-xl md:text-5xl font-black md:mt-2 text-[#d4c3a1] relative z-10">{calculateScore(opponent!, me!)}</div>
             <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1 md:mt-4 relative z-10"><span className="hidden md:inline">Cartas: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.hand.length || 0}</span></div>
             <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1 relative z-10"><span className="hidden md:inline">Cemitério: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.graveyard?.length || 0}</span></div>
             {opponent?.graveyard && opponent.graveyard.length > 0 && (
@@ -1747,7 +1747,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
           </div>
 
           {/* Player Info */}
-          <div className="p-2 md:p-6 bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="p-1 md:p-6 bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden text-center">
              {me?.profile?.coverUrl && (
                 <img src={me.profile.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-20 z-0" />
              )}
@@ -1769,12 +1769,12 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-xl">{me.graveyard.length}</div>
                </div>
             )}
-            <div className="text-3xl md:text-5xl font-black md:mb-2 text-[#d4c3a1] relative z-10">{calculateScore(me!, opponent!)}</div>
+            <div className="text-xl md:text-5xl font-black md:mb-2 text-[#d4c3a1] relative z-10">{calculateScore(me!, opponent!)}</div>
             <div className="flex items-center gap-2 mt-2 relative z-10">
               
               <div className="flex flex-col items-center gap-2">
                 {me?.profile?.avatarUrl && (
-                  <img src={me.profile.avatarUrl} alt="Avatar" className="w-6 h-6 md:w-10 md:h-10 rounded-full border border-[#3d3326] object-cover" />
+                  <img src={me.profile.avatarUrl} alt="Avatar" className="w-5 h-5 md:w-10 md:h-10 rounded-full border border-[#3d3326] object-cover" />
                 )}
                 <h3 
                   className={cn("text-xs uppercase tracking-widest font-bold", me?.profile?.font || "font-sans")} 
@@ -1789,7 +1789,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               </div>
             </div>
             {gameState.status === 'finished' && (
-              <div className="w-full mt-6 flex flex-col gap-2 relative z-10">
+              <div className="w-full mt-2 md:mt-6 flex flex-col gap-2 relative z-10">
                 {gameState.isBotMatch ? (
                    <button 
                      onClick={requestRematch}
@@ -1819,7 +1819,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               </div>
             )}
             {!me?.passed && gameState.status === 'playing' && (
-              <div className="w-full mt-6 flex flex-col gap-2 relative z-10">
+              <div className="w-full mt-2 md:mt-6 flex flex-col gap-2 relative z-10">
                 <button 
                   onClick={passTurn}
                   disabled={!isMyTurn}
@@ -1841,20 +1841,20 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
              {/* Opponent Board */}
              <div className="flex-1 flex flex-col justify-end gap-1 mb-2">
                 {opponent?.board.scenario && (
-                  <div className="min-h-[3.5rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-black/20 border border-white/5 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
+                  <div className="min-h-[3.25rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-black/20 border border-white/5 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
                      <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold">0</div>
                      {renderCard(opponent.board.scenario, 'opp-scen', opponent.board.scenario.isFacedown ? () => activateTrap(opponent.board.scenario!, 'opponent', 'scenario') : undefined)}
                      <span className="absolute right-4 text-[10px] uppercase text-white/20 font-sans tracking-tighter">Cenário</span>
                   </div>
                 )}
-                <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-black/20 border border-white/5 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={rangedBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${rangedBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+                <div className="min-h-[4.5rem] flex-1 sm:flex-none overflow-x-auto no-scrollbar sm:h-28 md:h-36 bg-black/20 border border-white/5 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={rangedBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${rangedBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold shadow-lg">
                      {getRowScore(opponent?.board.ranged || [], opponent?.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
                    {/* updated opp ranged */}<AnimatePresence>{opponent?.board.ranged.map((c, idx) => renderCard(c, `opp-r-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'opponent', 'ranged') : (targetingAssassinSpy && !c.effects?.includes('Herói') ? () => handleTargetEnemy(c) : undefined), getCardPoints(c, opponent.board.ranged, opponent.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-white/20 font-sans tracking-tighter">Fila à Distância</span>
                 </div>
-                <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-black/20 border border-white/5 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={meleeBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${meleeBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+                <div className="min-h-[4.5rem] flex-1 sm:flex-none overflow-x-auto no-scrollbar sm:h-28 md:h-36 bg-black/20 border border-white/5 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={meleeBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${meleeBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold shadow-lg">
                      {getRowScore(opponent?.board.melee || [], opponent?.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
@@ -1867,14 +1867,14 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
 
              {/* Player Board */}
              <div className="flex-1 flex flex-col justify-start gap-1 mt-2">
-                <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-[#2d2922]/30 border border-[#a67c52]/20 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={meleeBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${meleeBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+                <div className="min-h-[4.5rem] flex-1 sm:flex-none overflow-x-auto no-scrollbar sm:h-28 md:h-36 bg-[#2d2922]/30 border border-[#a67c52]/20 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={meleeBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${meleeBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">
                       {getRowScore(me?.board.melee || [], me?.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
                    {/* updated me melee */}<AnimatePresence>{me?.board.melee.map((c, idx) => renderCard(c, `me-m-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'me', 'melee') : undefined, getCardPoints(c, me.board.melee, me.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Fila Corpo a Corpo</span>
                 </div>
-                <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-[#2d2922]/30 border border-[#a67c52]/20 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={rangedBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${rangedBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+                <div className="min-h-[4.5rem] flex-1 sm:flex-none overflow-x-auto no-scrollbar sm:h-28 md:h-36 bg-[#2d2922]/30 border border-[#a67c52]/20 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={rangedBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${rangedBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">
                       {getRowScore(me?.board.ranged || [], me?.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
@@ -1882,7 +1882,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                    <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Fila à Distância</span>
                 </div>
                 {me?.board.scenario && (
-                  <div className="min-h-[3.5rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-[#2d2922]/30 border border-[#a67c52]/20 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
+                  <div className="min-h-[3.25rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-[#2d2922]/30 border border-[#a67c52]/20 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
                      <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">0</div>
                      {renderCard(me.board.scenario, 'me-scen', me.board.scenario.isFacedown ? () => activateTrap(me.board.scenario!, 'me', 'scenario') : undefined)}
                      <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Cenário</span>
