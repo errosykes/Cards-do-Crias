@@ -126,4 +126,5 @@ export interface GameState {
   roomPassword?: string;
   rematchGameId?: string;
   chatMessages?: ChatMessage[];
+  battleLog?: string[];
 }

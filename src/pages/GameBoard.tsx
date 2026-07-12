@@ -11,10 +11,11 @@ import { GameState, Card, GamePlayerState } from '../types';
 import { soundManager } from '../lib/sound';
 const dummySoundHook = () => {
 }
-import { ArrowLeft, Flag, Check, UserPlus, Eye, Swords, X, MessageSquare, Volume2 } from 'lucide-react';
+import { ArrowLeft, Flag, Check, UserPlus, Eye, Swords, X, MessageSquare, Volume2, List } from 'lucide-react';
 import { ChatPanel } from '../components/ChatPanel';
 import { CardModal } from '../components/CardModal';
 import { AudioSettingsModal } from '../components/AudioSettingsModal';
+import { BattleLogPanel } from '../components/BattleLogPanel';
 import { useAudio } from '../contexts/AudioContext';
 import { cn } from '../lib/utils';
 
@@ -156,6 +157,7 @@ export default function GameBoard() {
     return () => setCurrentPlaylist(null);
   }, [config.battleMusic, setCurrentPlaylist, gameState?.isBotMatch, gameState?.campaignId, config.campaignMusic]);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isLogOpen, setIsLogOpen] = useState(false);
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   const [roundOverlay, setRoundOverlay] = useState<{show: boolean, message: string, color: string}>({ show: false, message: '', color: '' });
   
@@ -417,7 +419,12 @@ export default function GameBoard() {
                if (gameState.player2.board.scenario) p2Graveyard.push(gameState.player2.board.scenario);
            }
 
+           let roundMsg = `Fim do Round ${gameState.round || 1}. `;
+           if (p1Rounds > (gameState.player1.roundsWon||0) && p2Rounds > (gameState.player2.roundsWon||0)) roundMsg += 'Empate!';
+           else if (p1Rounds > (gameState.player1.roundsWon||0)) roundMsg += `${gameState.player1.username} venceu a rodada.`;
+           else roundMsg += `${gameState.player2.username} venceu a rodada.`;
            updateDoc(doc(db, 'games', gameId!), {
+             battleLog: arrayUnion(roundMsg),
              round: (gameState.round || 1) + 1,
              'player1.board': { melee: [], ranged: [], scenario: null },
              'player2.board': { melee: [], ranged: [], scenario: null },
@@ -444,6 +451,7 @@ export default function GameBoard() {
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         const updateData: any = {};
+        const eventLogs: string[] = [];
 
         const p1Score = gameState.player1.score || 0;
         const botScore = botState.score || 0;
@@ -474,6 +482,8 @@ export default function GameBoard() {
         
         if (botDecidesToPass || chosenIndex === null) {
            updateData['player2.passed'] = true;
+           eventLogs.push(`${gameState.player2.username} passou o turno.`);
+           if (eventLogs.length > 0) { updateData.battleLog = arrayUnion(...eventLogs); }
            const nextTurn = gameState.player1.passed ? 'bot' : gameState.player1.uid;
            updateData.turn = nextTurn;
            
@@ -497,6 +507,8 @@ export default function GameBoard() {
           cardToPlay.isFacedown = true;
         }
         
+        eventLogs.push(cardToPlay.type === 'Trap' ? `${botState.username} jogou uma carta Trap virada para baixo.` : `${botState.username} jogou a carta ${cardToPlay.name}.`);
+        if (cardToPlay.type !== 'Trap' && cardToPlay.effects && cardToPlay.effects.length > 0) { eventLogs.push(`${botState.username} ativou: ${cardToPlay.effects.join(', ')}`); }
         let targetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
         if (cardToPlay.type === 'Ranged') targetRow = 'ranged';
         if (cardToPlay.type === 'Cenário' || cardToPlay.type === 'Scenario' || cardToPlay.effects?.includes('Clima')) targetRow = 'scenario';
@@ -673,6 +685,7 @@ export default function GameBoard() {
     }
 
     if (isScorch) {
+      eventLogs.push(`${me.username} usou Queimar, destruindo a(s) carta(s) mais forte(s) não-Herói do campo.`);
       const pMeleeBuffs = countGlobalBuff(newBoard, 'Buff de área melee');
       const pRangedBuffs = countGlobalBuff(newBoard, 'Buff de área ranged');
       const oMeleeBuffs = countGlobalBuff(updatedPlayer1?.board, 'Buff de área melee');
@@ -765,9 +778,12 @@ export default function GameBoard() {
             if (drawn) newHand.push(drawn);
           }
         }
+        if (shouldDraw > 0) eventLogs.push(`${botState.username} comprou ${shouldDraw} carta(s).`);
+        if (shouldDraw > 0) eventLogs.push(`${me.username} comprou ${shouldDraw} carta(s).`);
 
         updateData['player2.hand'] = newHand;
         updateData['player2.board'] = newBoard;
+        if (eventLogs && eventLogs.length > 0) { updateData.battleLog = arrayUnion(...eventLogs); }
         updateData['player2.graveyard'] = newGraveyard;
         updateData['player2.deck'] = newDeck;
         
@@ -838,7 +854,10 @@ export default function GameBoard() {
     const nextTurn = opponent?.passed ? me.uid : opponent?.uid;
     
     const updateData: any = {};
-    
+    const eventLogs: string[] = [];
+    eventLogs.push(playedCard.type === 'Trap' ? `${me.username} jogou uma carta Trap virada para baixo.` : `${me.username} jogou a carta ${card.name}.`);
+    if (playedCard.type !== 'Trap' && playedCard.effects && playedCard.effects.length > 0) { eventLogs.push(`${me.username} ativou: ${playedCard.effects.join(', ')}`); }
+
         const isTrap = playedCard.type === 'Trap';
     let isSpy = isTrap ? false : card.effects?.includes('Espião');
     let isAssassinSpy = isTrap ? false : card.effects?.some((e: string) => e.includes('Espião Assassino'));
@@ -873,6 +892,7 @@ export default function GameBoard() {
 
     if (isAssassinSpy && updatedOpponent && targetEnemyCard) {
       let destroyed = false;
+      eventLogs.push(`${me.username} usou Espião Assassino e tentou destruir ${targetEnemyCard.name}.`);
       updatedOpponent.board.melee = updatedOpponent.board.melee.filter(c => {
         if (!destroyed && c.id === targetEnemyCard.id && !c.effects?.includes('Herói')) {
           updatedOpponent.graveyard.push(c);
@@ -897,6 +917,7 @@ export default function GameBoard() {
         const randomIndex = Math.floor(Math.random() * updatedOpponent.hand.length);
         const stolenCard = updatedOpponent.hand.splice(randomIndex, 1)[0];
         newHand.push(stolenCard);
+        eventLogs.push(`${me.username} usou Ladrão e roubou a carta ${stolenCard.name} da mão do adversário.`);
       }
     }
         if (isMedic && newGraveyard.length > 0) {
@@ -906,12 +927,14 @@ export default function GameBoard() {
         const revivedCard = revivable[0];
         newGraveyard = newGraveyard.filter(c => c.id !== revivedCard.id);
         newHand.push(revivedCard);
+        eventLogs.push(`${me.username} usou Médico e reviveu ${revivedCard.name} do cemitério.`);
       }
     }
 
     if (isDinheiroJuros && updatedOpponent) {
       if (updatedOpponent.deck.length > 0) {
         const drawnOppCard = updatedOpponent.deck.shift();
+        if (drawnOppCard) eventLogs.push(`${me.username} usou Dinheiro a Juros. O adversário foi forçado a jogar ${drawnOppCard.name} do topo do baralho.`);
         if (drawnOppCard) {
           let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
           if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
@@ -1050,7 +1073,7 @@ export default function GameBoard() {
     }
     
     updateData.turn = nextTurn;
-    
+    if (eventLogs && eventLogs.length > 0) { updateData.battleLog = arrayUnion(...eventLogs); }
     if (nextTurn === opponent?.uid && updatedOpponent && updatedOpponent.deck.length > 0) {
        const drawnCard = updatedOpponent.deck.shift();
        if (drawnCard) {
@@ -1071,7 +1094,8 @@ export default function GameBoard() {
 
     const updateData: any = {
       [`${playerKey}.passed`]: true,
-      turn: nextTurn
+      turn: nextTurn,
+      battleLog: arrayUnion(`${me.username} passou o turno.`)
     };
 
     if (nextTurn === opponent?.uid && opponent && opponent.deck.length > 0) {
@@ -1207,6 +1231,9 @@ export default function GameBoard() {
     if (!userData || !gameState || !gameId) return;
 
     if (owner !== 'me') return; // Can only flip own traps
+    const eventLogs: string[] = [];
+    eventLogs.push(`${me.username} ativou a carta Trap: ${card.name}.`);
+    if (card.effects && card.effects.length > 0) { eventLogs.push(`${me.username} ativou: ${card.effects.join(', ')}`); }
 
     let newBoard = { ...me.board };
     let newHand = [...me.hand];
@@ -1237,11 +1264,13 @@ export default function GameBoard() {
 
     // Apply effects
     let isScorch = card.effects?.includes('Queimar');
+    if (isScorch) eventLogs.push(`${me.username} (Trap) ativou Queimar, destruindo a(s) carta(s) mais forte(s) não-Herói.`);
     let isThief = card.effects?.includes('Ladrão');
     let isDinheiroJuros = card.effects?.includes('Dinheiro a Juros');
     let isAssassinSpy = card.effects?.some((e: string) => e.includes('Espião Assassino'));
 
     if (isAssassinSpy && updatedOpponent) {
+      eventLogs.push(`${me.username} (Trap) ativou Espião Assassino, tentando destruir a carta mais forte do adversário.`);
       let highestPts = -1;
       let targetCard: any = null;
       let targetRow2: any = null;
@@ -1294,12 +1323,14 @@ export default function GameBoard() {
         const randomIndex = Math.floor(Math.random() * updatedOpponent.hand.length);
         const stolenCard = updatedOpponent.hand.splice(randomIndex, 1)[0];
         newHand.push(stolenCard);
+        eventLogs.push(`${me.username} (Trap) ativou Ladrão e roubou a carta ${stolenCard.name} da mão do adversário.`);
       }
     }
 
     if (isDinheiroJuros && updatedOpponent) {
       if (updatedOpponent.deck.length > 0) {
         const drawnOppCard = updatedOpponent.deck.shift();
+        if (drawnOppCard) eventLogs.push(`${me.username} (Trap) ativou Dinheiro a Juros. O adversário jogou ${drawnOppCard.name} do topo do baralho.`);
         if (drawnOppCard) {
           let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
           if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
@@ -1411,6 +1442,7 @@ export default function GameBoard() {
         newHand.push(newDeck.shift()!);
       }
     }
+    if (shouldDraw > 0) eventLogs.push(`${me.username} (Trap) comprou ${shouldDraw} carta(s).`);
 
     const playerKey = isPlayer1 ? 'player1' : 'player2';
     const opponentKey = isPlayer1 ? 'player2' : 'player1';
@@ -1633,7 +1665,8 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
         {/* Left Sidebar (Game Info & Pass) */}
         <div className="w-full md:w-64 bg-[#141210] flex flex-row md:flex-col border-b md:border-b-0 md:border-r border-[#3d3326] shadow-2xl z-10 shrink-0">
            {/* Top Actions */}
-           <div className="p-2 md:p-4 border-r md:border-r-0 md:border-b border-[#3d3326] flex flex-col md:flex-row items-center justify-center md:justify-between shrink-0 w-24 md:w-auto gap-2">
+           <div className="p-2 md:p-4 border-r md:border-r-0 md:border-b border-[#3d3326] flex flex-col items-center justify-center shrink-0 w-24 md:w-auto gap-2">
+              <div className="flex flex-col md:flex-row flex-wrap items-center justify-center gap-2 w-full">
               <button onClick={() => { navigate('/'); }} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-red-900/30 hover:bg-red-800 rounded flex items-center justify-center transition-colors w-full md:w-auto">
                  <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
                  <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Sair</span>
@@ -1641,6 +1674,10 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               <button onClick={() => setShowAudioSettings(true)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto">
                  <Volume2 className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
                  <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Áudio</span>
+              </button>
+              <button onClick={() => setIsLogOpen(!isLogOpen)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto relative">
+                 <List className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/>
+                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Registro</span>
               </button>
               <button onClick={() => setIsChatOpen(!isChatOpen)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto relative">
                  <MessageSquare className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
@@ -1651,7 +1688,8 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                     </span>
                  )}
               </button>
-              <div className="text-center">
+              </div>
+              <div className="text-center mt-2">
                 {gameState.status === 'finished' ? (
                   <h2 className="text-sm font-bold text-[#e2b17a] uppercase tracking-widest">
                     {gameState.winner === 'draw' ? 'EMPATE' : gameState.winner === userData.uid ? 'VITÓRIA' : 'DERROTA'}
@@ -1913,6 +1951,12 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
           myName={userData.username} 
           messages={gameState.chatMessages || []} 
           onClose={() => setIsChatOpen(false)} 
+        />
+      )}
+      {isLogOpen && (
+        <BattleLogPanel 
+          logs={gameState.battleLog || []} 
+          onClose={() => setIsLogOpen(false)} 
         />
       )}
       {showAudioSettings && <AudioSettingsModal onClose={() => setShowAudioSettings(false)} />}
