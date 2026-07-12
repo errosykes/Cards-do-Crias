@@ -12,6 +12,7 @@ export function ProfileModal({ userData, onClose }: Props) {
   const [font, setFont] = useState(userData.profile?.font || 'font-sans');
   const [color, setColor] = useState(userData.profile?.color || '#a67c52');
   const [avatarUrl, setAvatarUrl] = useState(userData.profile?.avatarUrl || '');
+  const [coverUrl, setCoverUrl] = useState(userData.profile?.coverUrl || '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -21,7 +22,8 @@ export function ProfileModal({ userData, onClose }: Props) {
         'profile': {
           font,
           color,
-          avatarUrl
+          avatarUrl,
+          coverUrl
         }
       });
       window.location.reload();
@@ -48,6 +50,17 @@ export function ProfileModal({ userData, onClose }: Props) {
             />
           </div>
 
+          <div>
+            <label className="block text-xs uppercase font-bold text-[#a67c52] mb-1">Foto de Capa (URL)</label>
+            <p className="text-[10px] text-[#d4c3a1]/60 mb-1">Tamanho ideal: 600x200 pixels (Proporção 3:1)</p>
+            <input 
+              type="text" 
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              className="w-full bg-[#0f0e0c] border border-[#3d3326] rounded p-2 text-sm text-[#d4c3a1] focus:outline-none focus:border-[#a67c52] transition-colors"
+              placeholder="https://..."
+            />
+          </div>
           <div>
             <label className="block text-xs uppercase font-bold text-[#a67c52] mb-1">Cor do Nome</label>
             <div className="flex gap-2">
@@ -79,13 +92,20 @@ export function ProfileModal({ userData, onClose }: Props) {
             </select>
           </div>
 
-          <div className="mt-6 p-4 border border-[#3d3326] rounded bg-[#0f0e0c] flex items-center gap-4">
-             {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full border-2 border-[#3d3326] object-cover" />
-             ) : (
-                <div className="w-12 h-12 rounded-full bg-[#3d3326] border-2 border-[#a67c52] flex items-center justify-center font-bold">?</div>
+          <div 
+            className="mt-6 p-6 border border-[#3d3326] rounded bg-[#0f0e0c] flex items-center gap-4 relative overflow-hidden h-32"
+          >
+             {coverUrl && (
+                <img src={coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-50 z-0" />
              )}
-             <span className={font} style={{ color: color, fontWeight: 'bold', fontSize: '1.25rem' }}>{userData.username}</span>
+             <div className="relative z-10 flex items-center gap-4 w-full">
+                 {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full border-2 border-[#a67c52] object-cover shadow-lg" />
+                 ) : (
+                    <div className="w-16 h-16 rounded-full bg-[#3d3326] border-2 border-[#a67c52] flex items-center justify-center font-bold shadow-lg text-lg">?</div>
+                 )}
+                 <span className={`${font} drop-shadow-md`} style={{ color: color, fontWeight: 'bold', fontSize: '1.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{userData.username}</span>
+             </div>
           </div>
 
           <div className="mt-6">

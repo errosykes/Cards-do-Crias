@@ -6,10 +6,12 @@ import React from "react";
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AudioProvider } from './contexts/AudioContext';
 import './lib/sound';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
+import Store from './pages/Store';
 import GameBoard from './pages/GameBoard';
 
 function PrivateRoute({ children, requireAdmin }: { children: React.ReactNode, requireAdmin?: boolean }) {
@@ -25,16 +27,19 @@ function PrivateRoute({ children, requireAdmin }: { children: React.ReactNode, r
 export default function App() {
   return (
     <AuthProvider>
+      <AudioProvider>
       <Router>
         <div className="h-full min-h-screen bg-[#0f0e0c] text-[#d4c3a1] font-serif selection:bg-[#a67c52]/30 flex flex-col flex-1 overflow-auto">
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/store" element={<PrivateRoute><Store /></PrivateRoute>} />
             <Route path="/admin" element={<PrivateRoute requireAdmin><AdminPanel /></PrivateRoute>} />
             <Route path="/game/:gameId" element={<PrivateRoute><GameBoard /></PrivateRoute>} />
           </Routes>
         </div>
       </Router>
+          </AudioProvider>
     </AuthProvider>
   );
 }

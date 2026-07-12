@@ -6,7 +6,10 @@ import { loadAllCards, getCachedCard } from '../lib/cardsCache';
 import { User, GameState, Card } from '../types';
 import { UserPlus, UserMinus, Search, Users } from 'lucide-react';
 
-import { ArrowRightLeft, Check, X, Swords } from 'lucide-react';
+import { ArrowRightLeft, Check, X, Swords, Trophy } from 'lucide-react';
+import { HistoryModal } from './HistoryModal';
+import { ViewProfileModal } from './ViewProfileModal';
+import { User as UserIcon } from 'lucide-react';
 
 interface Props {
   userData: User;
@@ -22,6 +25,8 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
   const [searchResult, setSearchResult] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedFriendHistory, setSelectedFriendHistory] = useState<User | null>(null);
+  const [selectedFriendProfile, setSelectedFriendProfile] = useState<User | null>(null);
 
   useEffect(() => {
     fetchFriends();
@@ -92,7 +97,7 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
       await updateDoc(doc(db, 'users', friendUid), {
         friendRequests: arrayUnion(userData.uid)
       });
-      alert('Pedido enviado!');
+      console.log('Pedido enviado!');
       setSearchResult(null);
     } catch (e) { console.error(e); setError('Erro ao enviar pedido.'); }
   };
@@ -132,7 +137,7 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
 
   const challengeFriend = async (friend: User) => {
     if (!userData.deck || userData.deck.length !== 10) {
-       alert('Você precisa de exatamente 10 cartas no baralho para jogar.');
+       console.log('Você precisa de exatamente 10 cartas no baralho para jogar.');
        return;
     }
     try {
@@ -176,7 +181,7 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
        onChallenge(newGameRef.id);
     } catch (e) {
        console.error(e);
-       alert('Erro ao desafiar amigo.');
+       console.log('Erro ao desafiar amigo.');
     }
   };
 
@@ -291,21 +296,31 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
              ) : (
                <div className="space-y-3">
                  {friends.map(friend => (
-                   <div key={friend.uid} className="bg-[#0f0e0c] border border-[#3d3326] p-3 rounded flex items-center justify-between">
-                     <div className="flex items-center gap-3">
+                   <div key={friend.uid} className="bg-[#0f0e0c] border border-[#3d3326] p-3 rounded flex items-center justify-between relative overflow-hidden">
+                     {friend.profile?.coverUrl && (
+                        <img src={friend.profile?.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-30 z-0" />
+                     )}
+                     <div className="flex items-center gap-3 relative z-10">
                         {friend.profile?.avatarUrl ? (
-                          <img src={friend.profile.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-[#3d3326] object-cover" />
+                          <img src={friend.profile.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-[#3d3326] object-cover shadow" />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-[#3d3326] flex items-center justify-center font-bold">?</div>
+                          <div className="w-10 h-10 rounded-full bg-[#3d3326] flex items-center justify-center font-bold shadow">?</div>
                         )}
                         <div 
-                          className={friend.profile?.font || "font-sans"} 
-                          style={{ color: friend.profile?.color || "#d4c3a1", fontWeight: 'bold' }}
+                          className={`${friend.profile?.font || "font-sans"} drop-shadow-md`}
+                          style={{ color: friend.profile?.color || "#d4c3a1", fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
                         >
                           {friend.username}
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2 relative z-10">
+                       <button 
+                         onClick={() => setSelectedFriendProfile(friend)}
+                         className="p-1.5 bg-[#3d3326] text-[#d4c3a1] rounded hover:bg-[#a67c52] hover:text-[#1a1814] transition-colors"
+                         title="Ver Perfil"
+                       >
+                         <UserIcon className="w-4 h-4" />
+                       </button>
                        <button 
                          onClick={() => challengeFriend(friend)}
                          className="p-1.5 bg-blue-900/50 text-blue-400 rounded hover:bg-blue-800 transition-colors flex items-center gap-1"
@@ -319,6 +334,13 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
                          title="Trocar Cartas"
                        >
                          <ArrowRightLeft className="w-4 h-4" />
+                       </button>
+                       <button 
+                         onClick={() => setSelectedFriendHistory(friend)}
+                         className="p-1.5 bg-yellow-900/50 text-yellow-500 rounded hover:bg-yellow-800 transition-colors"
+                         title="Ver Histórico"
+                       >
+                         <Trophy className="w-4 h-4" />
                        </button>
                        <button 
                          onClick={() => removeFriend(friend.uid)}
@@ -344,6 +366,16 @@ export function FriendsModal({ userData, onClose, onTrade, onChallenge }: Props)
           </button>
         </div>
       </div>
+      {selectedFriendHistory && (
+        <div className="fixed inset-0 z-[60]">
+          <HistoryModal userData={selectedFriendHistory} onClose={() => setSelectedFriendHistory(null)} />
+        </div>
+      )}
+      {selectedFriendProfile && (
+        <div className="fixed inset-0 z-[60]">
+          <ViewProfileModal user={selectedFriendProfile} onClose={() => setSelectedFriendProfile(null)} />
+        </div>
+      )}
     </div>
   );
 }

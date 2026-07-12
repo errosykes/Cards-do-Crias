@@ -1,10 +1,16 @@
+import { AdminPlayersTab } from "../components/AdminPlayersTab";
 import React from "react";
 import { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, orderBy, limit } from 'firebase/firestore';
+import { loadAllCards, getAllCachedCards } from '../lib/cardsCache';
 import { db } from '../lib/firebase';
 import { Card, CardType, User } from '../types';
-import { ArrowLeft, Plus, Trash2, Edit, Users, LayoutTemplate, Activity } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Package, ArrowLeft, Plus, Trash2, Edit, Users, LayoutTemplate, Activity, Shield } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { AdminPacksTab } from "../components/AdminPacksTab";
+import { AdminRewardsTab } from "../components/AdminRewardsTab";
+import { AdminCampaignsTab } from "../components/AdminCampaignsTab";
+import { EFFECT_DESCRIPTIONS } from "../lib/effects";
 
 const CARD_TYPES: CardType[] = ['Melee', 'Ranged', 'Cenário', 'Trap', 'Magic', 'Heal', 'Event'];
 
@@ -17,6 +23,8 @@ const PREDEFINED_EFFECTS = [
   'Comprar 2',
   'Queimar',
   'Impulso Moral',
+  'Ladrão',
+  'Dinheiro a Juros',
   'Vínculo Estreito',
   'Clima',
   'Buff de área melee',
@@ -27,26 +35,11 @@ const PREDEFINED_EFFECTS = [
   'DBUFF DE ESPECIFICO'
 ];
 
-const EFFECT_DESCRIPTIONS: Record<string, string> = {
-  'Espião': 'Jogue no campo inimigo e compre 2 cartas.',
-  'Médico': 'Revive uma carta do seu cemitério (exceto heróis).',
-  'Herói': 'Imune a cartas especiais e efeitos de cenário.',
-  'Comprar 1': 'Compre 1 carta do seu baralho.',
-  'Comprar 2': 'Compre 2 cartas do seu baralho.',
-  'Queimar': 'Destrói a(s) carta(s) normal(is) mais forte(s) da rodada.',
-  'Impulso Moral': 'Aumenta em 1 a força de todas as unidades da mesma fila.',
-  'Vínculo Estreito': 'Dobra a força quando combinada com a mesma carta na fila.',
-  'Clima': 'Afeta a força das unidades na respectiva fila.',
-  'Buff de área melee': '+1 para cada carta melee em todo o campo de combate para todos os jogadores.',
-  'Buff de área ranged': '+1 para cada carta ranged em todo o campo de combate para todos os jogadores.',
-  'Trap campo melee': 'Tira metade dos pontos (arredondado para cima) de todas as cartas da área Melee.',
-  'Trap campo Ranged': 'Tira metade dos pontos (arredondado para cima) de todas as cartas da área Ranged.',
-  'BUFF DE ESPECIFICO': '+1 ponto para uma carta específica do campo.',
-  'DBUFF DE ESPECIFICO': '-1 ponto para uma carta específica do campo.'
-};
+import { AdminAudioTab } from '../components/AdminAudioTab';
+import { Music } from 'lucide-react';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'cards' | 'players' | 'logs'>('cards');
+  const [activeTab, setActiveTab] = useState<'cards' | 'players' | 'logs' | 'packs' | 'rewards' | 'campaigns' | 'audio'>('cards');
   const [logs, setLogs] = useState<any[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [players, setPlayers] = useState<User[]>([]);
@@ -60,6 +53,7 @@ export default function AdminPanel() {
   const [points, setPoints] = useState<number>(0);
   const [imageUrl, setImageUrl] = useState('');
   const [backgroundUrl, setBackgroundUrl] = useState('');
+  const [backImageUrl, setBackImageUrl] = useState('');
   const [effects, setEffects] = useState<string[]>([]);
   const [buffTargetNames, setBuffTargetNames] = useState<string[]>([]);
   const [debuffTargetNames, setDebuffTargetNames] = useState<string[]>([]);
@@ -84,7 +78,7 @@ export default function AdminPanel() {
       await addDoc(collection(db, 'cards'), card);
     }
     
-    await fetchCards();
+    await fetchCards(true);
     setLoading(false);
   };
 
@@ -94,9 +88,10 @@ export default function AdminPanel() {
     fetchLogs();
   }, []);
 
-  const fetchCards = async () => {
-    const querySnapshot = await getDocs(collection(db, 'cards'));
-    const cardsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Card));
+  const fetchCards = async (force: boolean = false) => {
+    await loadAllCards(force);
+    
+    const cardsData = getAllCachedCards();
     setCards(cardsData);
     setLoading(false);
   };
@@ -121,6 +116,7 @@ export default function AdminPanel() {
     setPoints(0);
     setImageUrl('');
     setBackgroundUrl('');
+    setBackImageUrl('');
     setEffects([]);
     setBuffTargetNames([]);
     setDebuffTargetNames([]);
@@ -134,6 +130,7 @@ export default function AdminPanel() {
     setPoints(card.points);
     setImageUrl(card.imageUrl);
     setBackgroundUrl(card.backgroundUrl || '');
+    setBackImageUrl(card.backImageUrl || '');
     setEffects(card.effects || []);
     setBuffTargetNames(card.buffTargetNames || (card.buffTargetName ? [card.buffTargetName] : []));
     setDebuffTargetNames(card.debuffTargetNames || (card.debuffTargetName ? [card.debuffTargetName] : []));
@@ -142,7 +139,7 @@ export default function AdminPanel() {
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza?')) return;
     await deleteDoc(doc(db, 'cards', id));
-    fetchCards();
+    fetchCards(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,6 +152,7 @@ export default function AdminPanel() {
       points,
       imageUrl,
       backgroundUrl,
+      backImageUrl,
       effects,
       buffTargetNames,
       debuffTargetNames
@@ -167,7 +165,7 @@ export default function AdminPanel() {
     }
     
     resetForm();
-    fetchCards();
+    fetchCards(true);
   };
 
   return (
@@ -201,6 +199,34 @@ export default function AdminPanel() {
           >
             <Activity className="w-4 h-4" />
             Logs de Atividade
+          </button>
+          <button 
+            onClick={() => setActiveTab('packs')} 
+            className={`px-4 py-2 text-xs font-bold uppercase rounded flex items-center gap-2 transition-colors ${activeTab === 'packs' ? 'bg-[#3d3326] text-[#e2b17a]' : 'text-[#d4c3a1]/60 hover:text-[#d4c3a1]'}`}
+          >
+            <Package className="w-4 h-4" />
+            Pacotes (Loja)
+          </button>
+          <button 
+            onClick={() => setActiveTab('rewards')} 
+            className={`px-4 py-2 text-xs font-bold uppercase rounded flex items-center gap-2 transition-colors ${activeTab === 'rewards' ? 'bg-[#3d3326] text-[#e2b17a]' : 'text-[#d4c3a1]/60 hover:text-[#d4c3a1]'}`}
+          >
+            <Activity className="w-4 h-4" />
+            Recompensas
+          </button>
+          <button 
+            onClick={() => setActiveTab('audio')} 
+            className={`px-4 py-2 text-xs font-bold uppercase rounded flex items-center gap-2 transition-colors ${activeTab === 'audio' ? 'bg-[#3d3326] text-[#e2b17a]' : 'text-[#d4c3a1]/60 hover:text-[#d4c3a1]'}`}
+          >
+            <Music className="w-4 h-4" />
+            Áudio
+          </button>
+          <button 
+            onClick={() => setActiveTab('campaigns')} 
+            className={`px-4 py-2 text-xs font-bold uppercase rounded flex items-center gap-2 transition-colors ${activeTab === 'campaigns' ? 'bg-[#3d3326] text-[#e2b17a]' : 'text-[#d4c3a1]/60 hover:text-[#d4c3a1]'}`}
+          >
+            <Shield className="w-4 h-4" />
+            Torneios
           </button>
         </div>
       </div>
@@ -250,6 +276,13 @@ export default function AdminPanel() {
               <div>
                 <label className="block text-[10px] uppercase font-bold text-[#a67c52] mb-1">URL do Papel de Parede (Opcional - Efeito de Campo)</label>
                 <input type="url" value={backgroundUrl} onChange={e => setBackgroundUrl(e.target.value)} className="w-full bg-black/50 border border-[#3d3326] rounded px-3 py-2 text-sm text-[#d4c3a1] focus:outline-none focus:border-[#a67c52]" placeholder="https://..." />
+              </div>
+            )}
+            
+            {type === 'Trap' && (
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-[#a67c52] mb-1">URL da parte de trás da carta (Trap)</label>
+                <input type="url" value={backImageUrl} onChange={e => setBackImageUrl(e.target.value)} className="w-full bg-black/50 border border-[#3d3326] rounded px-3 py-2 text-sm text-[#d4c3a1] focus:outline-none focus:border-[#a67c52]" placeholder="https://..." />
               </div>
             )}
             <div>
@@ -352,7 +385,7 @@ export default function AdminPanel() {
                 {cards.map(card => (
                   <div key={card.id} className="bg-black/40 border border-[#3d3326] rounded p-4 flex gap-4 items-start shadow-md">
                     {card.imageUrl ? (
-                      <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-20 h-28 object-cover rounded shadow-md border border-[#3d3326]" />
+                      <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-20 h-28 object-contain rounded shadow-md border border-[#3d3326] bg-black/50" />
                     ) : (
                       <div className="w-20 h-28 bg-[#3d3326] rounded border border-[#a67c52] flex items-center justify-center text-[10px] text-center font-bold text-[#d4c3a1]/50 p-2 uppercase">Sem Imagem</div>
                     )}
@@ -379,101 +412,16 @@ export default function AdminPanel() {
           </div>
         </div>
       </div>
+      ) : activeTab === 'packs' ? (
+        <AdminPacksTab cards={cards} />
+      ) : activeTab === 'rewards' ? (
+        <AdminRewardsTab />
+      ) : activeTab === 'campaigns' ? (
+        <AdminCampaignsTab cards={cards} />
       ) : activeTab === 'players' ? (
-        <div className="bg-[#1a1814] border border-[#3d3326] rounded p-6 shadow-2xl">
-          <h2 className="text-sm font-bold tracking-tighter text-[#a67c52] uppercase mb-4">Jogadores Registrados ({players.length})</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {players.map(player => (
-              <div key={player.uid} className="bg-black/40 border border-[#3d3326] rounded p-4 shadow-md flex flex-col">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-2">
-                     <h3 className="font-bold text-sm uppercase text-[#e2b17a]">{player.username}</h3>
-                     {player.hasAllCards && player.role !== 'admin' && (
-                        <span className="text-[8px] bg-green-900/40 text-green-400 border border-green-500/30 px-1 rounded uppercase tracking-wider">
-                           All Cards
-                        </span>
-                     )}
-                  </div>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${player.role === 'admin' ? 'bg-[#a67c52]/20 text-[#a67c52] border border-[#a67c52]/30' : 'bg-[#3d3326] text-[#d4c3a1]/60'}`}>
-                    {player.role}
-                  </span>
-                </div>
-                <div className="text-xs text-[#d4c3a1]/70 mb-2 truncate">{player.email}</div>
-                <div className="flex justify-between text-[10px] uppercase font-bold text-[#d4c3a1]/50 mb-2">
-                  <span>Cartas no Inventário: {player.inventory.length}</span>
-                  <span>Cartas no Baralho: {player.deck.length}</span>
-                </div>
-                <div className="text-[10px] font-mono text-[#a67c52]/50 break-all bg-black/40 p-1 rounded mb-4">
-                  UID: {player.uid}
-                </div>
-                
-                <div className="mb-4">
-                   <button
-                     onClick={async () => {
-                        try {
-                           await updateDoc(doc(db, 'users', player.uid), {
-                              hasAllCards: !player.hasAllCards
-                           });
-                        } catch (e) {
-                           console.error(e);
-                        }
-                     }}
-                     className={`w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-widest transition-colors ${player.hasAllCards ? 'bg-[#a67c52] text-[#141210] hover:bg-[#a67c52]/80' : 'bg-[#3d3326] text-[#d4c3a1]/80 hover:bg-[#4d4030]'}`}
-                   >
-                     {player.hasAllCards ? 'Desativar Todas as Cartas' : 'Liberar Todas as Cartas'}
-                   </button>
-                </div>
-                
-                {/* Give Card Section */}
-                <div className="mt-auto border-t border-[#3d3326] pt-3">
-                  <form 
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const form = e.target as HTMLFormElement;
-                      const cardIdInput = form.elements.namedItem('cardId') as HTMLSelectElement;
-                      const quantityInput = form.elements.namedItem('quantity') as HTMLInputElement;
-                      
-                      const cardId = cardIdInput.value;
-                      const qty = parseInt(quantityInput.value) || 1;
-                      
-                      if (!cardId || qty < 1) return;
-                      
-                      const newInventory = [...player.inventory];
-                      for (let i = 0; i < qty; i++) {
-                        newInventory.push(cardId);
-                      }
-                      
-                      try {
-                        await updateDoc(doc(db, 'users', player.uid), {
-                          inventory: newInventory
-                        });
-                        alert(`Adicionadas ${qty} carta(s) ao jogador ${player.username}`);
-                        fetchPlayers();
-                        form.reset();
-                      } catch (err) {
-                        console.error(err);
-                        alert('Erro ao dar carta.');
-                      }
-                    }}
-                    className="flex flex-col gap-2"
-                  >
-                    <label className="text-[10px] uppercase font-bold text-[#a67c52]">Dar Carta ao Jogador</label>
-                    <div className="flex gap-2">
-                      <select name="cardId" required className="flex-1 bg-black/50 border border-[#3d3326] rounded px-2 py-1 text-xs text-[#d4c3a1] focus:outline-none focus:border-[#a67c52]">
-                        <option value="">Selecione a Carta...</option>
-                        {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                      <input name="quantity" type="number" min="1" defaultValue="1" required className="w-16 bg-black/50 border border-[#3d3326] rounded px-2 py-1 text-xs text-[#d4c3a1] focus:outline-none focus:border-[#a67c52] text-center" />
-                    </div>
-                    <button type="submit" className="w-full bg-[#3d3326] hover:bg-[#a67c52]/50 text-[#d4c3a1] py-1.5 rounded text-[10px] font-bold uppercase transition-colors flex justify-center items-center gap-1">
-                      <Plus className="w-3 h-3" /> Adicionar ao Inventário
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <AdminPlayersTab players={players} cards={cards} fetchPlayers={fetchPlayers} />
+      ) : activeTab === 'audio' ? (
+        <AdminAudioTab />
       ) : activeTab === 'logs' ? (
         <div className="bg-[#141210] border border-[#3d3326] rounded p-6 shadow-2xl">
           <div className="flex justify-between items-center mb-4">

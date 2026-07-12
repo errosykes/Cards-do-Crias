@@ -70,6 +70,18 @@ export function HowToPlayModal({ onClose }: Props) {
                 <p className="text-xs">Cartas douradas. Elas têm muito poder e são imunes a magias, armadilhas e cenários.</p>
               </div>
               <div className="bg-black/30 p-3 rounded border border-[#3d3326]">
+                <h4 className="font-bold text-[#e2b17a] mb-1">Ladrão</h4>
+                <p className="text-xs">Você joga a carta no campo do oponente (dando pontos a ele), e em troca rouba uma carta aleatória da mão dele para a sua.</p>
+              </div>
+              <div className="bg-black/30 p-3 rounded border border-[#3d3326]">
+                <h4 className="font-bold text-[#e2b17a] mb-1">Dinheiro a Juros</h4>
+                <p className="text-xs">O oponente ganha os pontos da carta, mas é forçado a comprar e jogar a carta do topo do baralho dele imediatamente.</p>
+              </div>
+              <div className="bg-black/30 p-3 rounded border border-[#3d3326]">
+                <h4 className="font-bold text-[#e2b17a] mb-1">Espião Assassino</h4>
+                <p className="text-xs">Você joga no campo inimigo. Destrói a carta normal mais forte do oponente e você compra 2 cartas do seu baralho.</p>
+              </div>
+              <div className="bg-black/30 p-3 rounded border border-[#3d3326]">
                 <h4 className="font-bold text-[#e2b17a] mb-1">Espião</h4>
                 <p className="text-xs">Você joga a carta no campo do oponente (dando pontos a ele!), mas em troca, compra 2 cartas do seu baralho.</p>
               </div>

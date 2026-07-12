@@ -60,11 +60,11 @@ export function DeckModal({ deckIds, onClose }: Props) {
                  {grouped.map(({card, count}) => (
                     <div key={card.id} className="relative flex flex-col transition-transform hover:scale-105">
                       <div className="relative cursor-pointer w-full group" onClick={() => setSelectedCard(card)}>
-                        <div className="absolute -top-2 -left-2 bg-black text-[#d4c3a1] text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#3d3326]">
+                        <div className="absolute top-1 left-1 bg-black text-[#d4c3a1] text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#3d3326]">
                           x{count}
                         </div>
                         {card.imageUrl ? (
-                          <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-full aspect-[2/3] object-cover rounded shadow-md border border-[#3d3326]" />
+                          <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-full aspect-[2/3] object-contain rounded shadow-md border border-[#3d3326] bg-black/50" />
                         ) : (
                           <div className="w-full aspect-[2/3] bg-[#3d3326] rounded border border-[#a67c52] flex flex-col items-center justify-center p-2 text-center">
                              <span className="text-xs font-bold uppercase">{card.name}</span>

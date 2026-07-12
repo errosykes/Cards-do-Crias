@@ -7,17 +7,29 @@ import { loadAllCards, getCachedCard, getAllCachedCards } from '../lib/cardsCach
 import { doc, getDoc, updateDoc, collection, addDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { Card, GameState } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShieldAlert, Plus, Play, LogOut, Edit2, Check, User as UserIcon, Users, Eye, Trophy } from 'lucide-react';
+import { Store as StoreIcon, ShieldAlert, Plus, Play, LogOut, Edit2, Check, User as UserIcon, Users, Eye, Trophy, Volume2 } from 'lucide-react';
 import { ProfileModal } from '../components/ProfileModal';
 import { HistoryModal } from '../components/HistoryModal';
 import { FriendsModal } from '../components/FriendsModal';
 import { TradeModal } from '../components/TradeModal';
 import { CardModal } from '../components/CardModal';
+import { AudioSettingsModal } from '../components/AudioSettingsModal';
+import { useAudio } from '../contexts/AudioContext';
+import { TournamentTab } from '../components/TournamentTab';
 import { DeckModal } from '../components/DeckModal';
 import { HowToPlayModal } from '../components/HowToPlayModal';
 
 export default function Dashboard() {
   const { userData } = useAuth();
+  const { setCurrentPlaylist, config } = useAudio();
+
+  useEffect(() => {
+    if (config.menuMusic && config.menuMusic.length > 0) {
+      setCurrentPlaylist(config.menuMusic);
+    } else {
+      setCurrentPlaylist(null);
+    }
+  }, [config.menuMusic, setCurrentPlaylist]);
   const [inventoryCards, setInventoryCards] = useState<Card[]>([]);
   const [deckIds, setDeckIds] = useState<string[]>([]);
   const [cardCodeInput, setCardCodeInput] = useState('');
@@ -28,6 +40,7 @@ export default function Dashboard() {
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [activeTradeId, setActiveTradeId] = useState<string | null>(null);
   const [incomingChallenge, setIncomingChallenge] = useState<GameState | null>(null);
@@ -35,7 +48,7 @@ export default function Dashboard() {
   const [showDeckModal, setShowDeckModal] = useState(false);
   const [showHowToPlayModal, setShowHowToPlayModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [botDifficulty, setBotDifficulty] = useState<'easy' | 'normal' | 'hard' | 'expert'>('easy');
+  const [botDifficulty, setBotDifficulty] = useState<'easy' | 'normal' | 'hard' | 'expert' | 'adaptive'>('easy');
   const [showOnlyDeck, setShowOnlyDeck] = useState(false);
   const [deckNameInput, setDeckNameInput] = useState('');
 
@@ -43,6 +56,7 @@ export default function Dashboard() {
   const [roomPassword, setRoomPassword] = useState('');
   const [roomError, setRoomError] = useState('');
   const [roomMode, setRoomMode] = useState<'create' | 'join'>('create');
+  const [mainTab, setMainTab] = useState<'geral' | 'torneio'>('geral');
   
   const navigate = useNavigate();
 
@@ -58,8 +72,16 @@ export default function Dashboard() {
       
       setNewUsername(userData.username || '');
       
-      const tradesQ = query(collection(db, 'trades'), where('participants', 'array-contains', userData.uid));
-      const challengesQ = query(collection(db, 'games'), where('status', '==', 'challenge'));
+      const tradesQ = query(
+        collection(db, 'trades'),
+        where('status', '==', 'pending'),
+        where('participants', 'array-contains', userData.uid)
+      );
+      const challengesQ = query(
+        collection(db, 'games'),
+        where('status', '==', 'challenge'),
+        where('player2.uid', '==', userData.uid)
+      );
       const unsubChallenges = onSnapshot(challengesQ, (snap) => {
          const challenges = snap.docs
             .map(d => ({ id: d.id, ...d.data() } as GameState))
@@ -72,7 +94,7 @@ export default function Dashboard() {
       }, (err) => console.error('Error in challenges listener:', err));
 
       const unsubTrades = onSnapshot(tradesQ, (snap) => {
-         const pendingTrades = snap.docs.filter(d => d.data().status === 'pending');
+         const pendingTrades = snap.docs.filter(d => d.data().participants?.includes(userData?.uid));
          if (pendingTrades.length > 0) {
             const tradeDoc = pendingTrades[0];
             if (!activeTradeId) {
@@ -89,13 +111,14 @@ export default function Dashboard() {
 
   const acceptChallenge = async (gameId: string) => {
     if (deckIds.length !== 10) {
-      alert('Você precisa de exatamente 10 cartas no baralho para jogar!');
+      console.log('Você precisa de exatamente 10 cartas no baralho para jogar!');
       return;
     }
     try {
-      const p2DeckPromises = deckIds.map(cid => getDoc(doc(db, 'cards', cid)));
-      const p2DeckSnaps = await Promise.all(p2DeckPromises);
-      const p2Deck: Card[] = p2DeckSnaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() } as Card));
+      await loadAllCards();
+      const p2Deck = deckIds.map(cid => getCachedCard(cid)).filter(Boolean) as Card[];
+      
+      
       await updateDoc(doc(db, 'games', gameId), {
         'player2.deck': p2Deck,
         status: 'playing'
@@ -162,7 +185,7 @@ export default function Dashboard() {
     }
 
     try {
-      await loadAllCards();
+      await loadAllCards(true); // Force reload to ensure new cards are fetched
       const cardCode = cardCodeInput.trim();
       const cachedCard = getCachedCard(cardCode);
       
@@ -190,7 +213,7 @@ export default function Dashboard() {
     let newDeck = [...deckIds];
     if (action === 'add') {
       if (newDeck.length >= 10) {
-         alert('Seu baralho já possui o máximo de 10 cartas! Remova alguma antes de adicionar outra.');
+         console.log('Seu baralho já possui o máximo de 10 cartas! Remova alguma antes de adicionar outra.');
          return;
       }
       newDeck.push(cardId);
@@ -219,12 +242,13 @@ export default function Dashboard() {
     setSearching(true);
     
     try {
-      const p1DeckPromises = deckIds.map(cid => getDoc(doc(db, 'cards', cid)));
-      const p1DeckSnaps = await Promise.all(p1DeckPromises);
-      const p1Deck = p1DeckSnaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() }));
+      await loadAllCards();
+      const p1Deck = deckIds.map(cid => getCachedCard(cid)).filter(Boolean) as Card[];
+      
+      
 
-      const cardsSnapshot = await getDocs(collection(db, 'cards'));
-      const allCards = cardsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      const allCards = getAllCachedCards();
       const botDeck = [...allCards].sort(() => 0.5 - Math.random()).slice(0, 10);
 
       const gamesRef = collection(db, 'games');
@@ -281,13 +305,39 @@ export default function Dashboard() {
     setSearching(true);
     
     try {
-      const p1DeckPromises = deckIds.map(cid => getDoc(doc(db, 'cards', cid)));
-      const p1DeckSnaps = await Promise.all(p1DeckPromises);
-      const p1Deck: Card[] = p1DeckSnaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() } as Card));
+      await loadAllCards();
+      const p1Deck = deckIds.map(cid => getCachedCard(cid)).filter(Boolean) as Card[];
+      
+      
 
-      const cardsSnapshot = await getDocs(collection(db, 'cards'));
-      const allCards = cardsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const botDeck: Card[] = [...allCards].sort(() => 0.5 - Math.random()).slice(0, 10) as Card[];
+      
+      const allCards = getAllCachedCards();
+      let botDeck: Card[] = [];
+      
+      if (botDifficulty === 'adaptive') {
+         // Try to load weights
+         let cardWeights: Record<string, number> = {};
+         try {
+           const snap = await getDoc(doc(db, 'ai_data', 'learning'));
+           if (snap.exists()) {
+              cardWeights = snap.data().cardWeights || {};
+           }
+         } catch(e) {}
+         
+         const sortedCards = [...allCards].sort((a, b) => {
+            const wa = cardWeights[a.name] || 0;
+            const wb = cardWeights[b.name] || 0;
+            // Also value base points
+            return (wb + (b.points || 0) * 0.5) - (wa + (a.points || 0) * 0.5);
+         });
+         
+         // Top 7 learned cards + 3 random for variety
+         const bestCards = sortedCards.slice(0, 15).sort(() => 0.5 - Math.random()).slice(0, 7);
+         const otherCards = sortedCards.slice(15).sort(() => 0.5 - Math.random()).slice(0, 3);
+         botDeck = [...bestCards, ...otherCards].sort(() => 0.5 - Math.random());
+      } else {
+         botDeck = [...allCards].sort(() => 0.5 - Math.random()).slice(0, 10) as Card[];
+      }
 
       const gamesRef = collection(db, 'games');
       const newGameData = {
@@ -333,6 +383,66 @@ export default function Dashboard() {
     }
   };
 
+  
+  const startSpecificBotMatch = async (diff: string, customDeck: Card[], botName: string, botProfile?: any, campaignId?: string) => {
+    if (deckIds.length < 10) {
+      setError('Você precisa de pelo menos 10 cartas no seu baralho para jogar.');
+      return;
+    }
+    setSearching(true);
+    
+    try {
+      await loadAllCards();
+      const p1Deck = deckIds.map(cid => getCachedCard(cid)).filter(Boolean) as Card[];
+      
+      
+
+      const gamesRef = collection(db, 'games');
+      const newGameData = {
+        player1: {
+          uid: userData?.uid,
+          username: userData?.username,
+          profile: userData?.profile || null,
+          deck: p1Deck,
+          hand: [],
+          graveyard: [],
+          board: { melee: [], ranged: [], scenario: null },
+          score: 0,
+          passed: false,
+          roundsWon: 0,
+          initialDraw: false
+        },
+        player2: {
+          uid: 'bot',
+          username: botName,
+          profile: botProfile || null,
+          deck: customDeck,
+          hand: [],
+          graveyard: [],
+          board: { melee: [], ranged: [], scenario: null },
+          score: 0,
+          passed: false,
+          roundsWon: 0,
+          initialDraw: false
+        },
+        status: 'playing',
+        turn: userData?.uid,
+        round: 1,
+        winner: null,
+        isBotMatch: true,        
+        botDifficulty: diff,
+        campaignId: campaignId || null
+      };
+      
+      const newGameRef = await addDoc(gamesRef, newGameData);
+      navigate('/game/' + newGameRef.id);
+    } catch(err) {
+      console.error(err);
+      setError('Ocorreu um erro ao iniciar a partida com o bot.');
+      setSearching(false);
+    }
+  };
+
   const findMatch = async () => {
     if (deckIds.length < 10) {
       setError('Você precisa de pelo menos 10 cartas no seu baralho para jogar.');
@@ -342,14 +452,16 @@ export default function Dashboard() {
     setSearching(true);
     
     const gamesRef = collection(db, 'games');
-    const myGamesQ = query(gamesRef, where('status', 'in', ['waiting', 'playing']));
+    const p1GamesQ = query(gamesRef, where('status', 'in', ['waiting', 'playing']));
+    
     
     try {
-      const snapshot = await getDocs(myGamesQ);
+      const activeGamesSnap = await getDocs(p1GamesQ);
+      const allDocs = activeGamesSnap.docs;
       let existingMyGame = null;
       let availableGame = null;
 
-      snapshot.docs.forEach(doc => {
+      allDocs.forEach(doc => {
         const game = doc.data() as GameState;
         if (game.status === 'playing' || game.status === 'waiting') {
            if (game.player1.uid === userData?.uid || game.player2?.uid === userData?.uid) {
@@ -540,6 +652,7 @@ export default function Dashboard() {
       {activeTradeId && userData && (
         <TradeModal tradeId={activeTradeId} userData={userData} onClose={() => setActiveTradeId(null)} />
       )}
+      {showAudioSettings && <AudioSettingsModal onClose={() => setShowAudioSettings(false)} />}
       {selectedCardModal && (
         <CardModal card={selectedCardModal} onClose={() => setSelectedCardModal(null)} />
       )}
@@ -558,8 +671,11 @@ export default function Dashboard() {
                 className="px-4 py-2 bg-green-900/50 hover:bg-green-800 text-green-200 rounded font-bold uppercase text-xs transition-colors border border-green-900"
               >Aceitar</button>
             </div>
+    
           </div>
+    
         </div>
+    
       )}
       {showDeckModal && userData && (
         <DeckModal deckIds={deckIds} onClose={() => setShowDeckModal(false)} />
@@ -571,10 +687,17 @@ export default function Dashboard() {
         <HistoryModal userData={userData} onClose={() => setShowHistoryModal(false)} />
       )}
       {/* Header */}
-      <div className="flex justify-between items-center bg-[#1a1814] border border-[#3d3326] p-4 rounded shadow-2xl flex-wrap gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            {isEditingUsername ? (
+      <div className="flex justify-between items-center bg-[#1a1814] border border-[#3d3326] p-4 rounded shadow-2xl flex-wrap gap-4 relative overflow-hidden">
+        {userData?.profile?.coverUrl && (
+           <img src={userData.profile.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-30 z-0" />
+        )}
+        <div className="relative z-10 flex items-center gap-4">
+          {userData?.profile?.avatarUrl && (
+             <img src={userData.profile.avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full border border-[#a67c52] object-cover shadow" />
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              {isEditingUsername ? (
               <div className="flex items-center gap-2">
                 <input 
                   type="text" 
@@ -587,8 +710,14 @@ export default function Dashboard() {
                   <Check className="w-4 h-4" />
                 </button>
               </div>
+    
             ) : (
-              <h1 className="text-2xl font-bold tracking-tighter text-[#a67c52] uppercase">Bem-vindo, {userData?.username}</h1>
+              <h1 
+                className={`text-2xl font-bold tracking-tighter uppercase ${userData?.profile?.font || ''}`}
+                style={{ color: userData?.profile?.color || '#a67c52', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
+              >
+                Bem-vindo, {userData?.username}
+              </h1>
             )}
             {!isEditingUsername && (
               <button onClick={() => setIsEditingUsername(true)} className="text-[#d4c3a1]/40 hover:text-[#a67c52] transition-colors p-1">
@@ -596,14 +725,26 @@ export default function Dashboard() {
               </button>
             )}
           </div>
+    
           <p className="text-[#d4c3a1]/60 text-[10px] tracking-widest uppercase">Prepare seu baralho para a batalha.</p>
+          <div className="flex gap-2 text-[10px] uppercase font-bold tracking-widest mt-1">
+             <span className="text-[#d4c3a1]/60">Nível: <span className="text-[#e2b17a]">{userData?.tournamentProgress || 1}</span></span>
+             <span className="text-[#d4c3a1]/60">Cruzeiros: <span className="text-yellow-500">{userData?.cruzeiros || 0} C$</span></span>
+          </div>
+    
+          </div>
+    
         </div>
-        <div className="flex gap-4">
+    
+        <div className="flex gap-4 relative z-10">
           {userData?.role === 'admin' && (
             <Link to="/admin" className="flex items-center gap-2 bg-[#a67c52]/10 border border-[#a67c52]/30 text-[#a67c52] px-4 py-2 rounded text-xs font-bold uppercase hover:bg-[#a67c52]/20 transition-colors">
               <ShieldAlert className="w-4 h-4" /> Painel Admin
             </Link>
           )}
+          <Link to="/store" className="flex items-center gap-2 bg-gradient-to-r from-yellow-700 to-yellow-600 border border-yellow-500/30 text-black px-4 py-2 rounded text-xs font-bold uppercase hover:from-yellow-600 hover:to-yellow-500 transition-colors shadow-[0_0_10px_rgba(202,138,4,0.3)]">
+             <StoreIcon className="w-4 h-4" /> Loja
+          </Link>
           <button onClick={() => setShowFriendsModal(true)} className="flex items-center gap-2 px-4 py-2 bg-[#3d3326] hover:bg-[#a67c52] text-[#d4c3a1] hover:text-[#141210] rounded uppercase font-bold text-xs transition-colors relative">
             <Users className="w-4 h-4" /> Amigos
             {userData?.friendRequests && userData.friendRequests.length > 0 && (
@@ -615,6 +756,9 @@ export default function Dashboard() {
           <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-2 px-4 py-2 bg-[#3d3326] hover:bg-[#a67c52] text-[#d4c3a1] hover:text-[#141210] rounded uppercase font-bold text-xs transition-colors">
             <Trophy className="w-4 h-4" /> Histórico
           </button>
+          <button onClick={() => setShowAudioSettings(true)} className="flex items-center gap-2 px-4 py-2 bg-[#3d3326] hover:bg-[#a67c52] text-[#d4c3a1] hover:text-[#141210] rounded uppercase font-bold text-xs transition-colors">
+            <Volume2 className="w-4 h-4" /> Áudio
+          </button>
           <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-2 px-4 py-2 bg-[#3d3326] hover:bg-[#a67c52] text-[#d4c3a1] hover:text-[#141210] rounded uppercase font-bold text-xs transition-colors">
             <UserIcon className="w-4 h-4" /> Perfil
           </button>
@@ -622,9 +766,31 @@ export default function Dashboard() {
              <LogOut className="w-4 h-4" /> Sair
           </button>
         </div>
+    
       </div>
+    
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="flex gap-2 mb-4 w-full justify-center">
+           <button 
+              onClick={() => setMainTab('geral')}
+              className={`px-6 py-2 rounded text-xs font-bold uppercase tracking-widest transition-colors border ${mainTab === 'geral' ? 'bg-[#a67c52] text-black border-[#a67c52]' : 'bg-black/50 text-[#d4c3a1]/60 border-[#3d3326] hover:text-[#d4c3a1]'}`}
+           >
+              Geral
+           </button>
+           <button 
+              onClick={() => setMainTab('torneio')}
+              className={`px-6 py-2 rounded text-xs font-bold uppercase tracking-widest transition-colors border ${mainTab === 'torneio' ? 'bg-[#a67c52] text-black border-[#a67c52]' : 'bg-black/50 text-[#d4c3a1]/60 border-[#3d3326] hover:text-[#d4c3a1]'}`}
+           >
+              1º Torneio
+           </button>
+      </div>
+    
+      
+      {mainTab === 'torneio' && userData && (
+         <TournamentTab userData={userData} startSpecificBotMatch={startSpecificBotMatch} searching={searching} />
+      )}
+
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${mainTab === 'geral' ? '' : 'hidden'}`}>
         
         {/* Left Column: Actions */}
         <div className="space-y-8 lg:col-span-1">
@@ -651,6 +817,7 @@ export default function Dashboard() {
                 <option value="normal">Bot: Normal</option>
                 <option value="hard">Bot: Difícil</option>
                 <option value="expert">Bot: Impossível</option>
+                <option value="adaptive">MODO IA (Aprende)</option>
               </select>
               <button 
                 onClick={startBotMatch}
@@ -660,6 +827,7 @@ export default function Dashboard() {
                 Jogar Bot
               </button>
             </div>
+    
             <button 
               onClick={startTutorialMatch}
               disabled={searching}
@@ -678,6 +846,7 @@ export default function Dashboard() {
                <p className="text-red-500 text-xs mt-2 uppercase font-bold text-[10px]">O baralho requer 10 cartas. ({deckIds.length}/10)</p>
             )}
           </div>
+    
 
           {/* Private Room */}
           <div className="bg-[#1a1814] border border-[#3d3326] p-6 rounded shadow-2xl">
@@ -696,6 +865,7 @@ export default function Dashboard() {
                  Entrar
                </button>
             </div>
+    
             <form onSubmit={handlePrivateRoom} className="space-y-3">
               <input
                 type="text"
@@ -722,6 +892,7 @@ export default function Dashboard() {
               {roomError && <p className="text-red-500 text-xs mt-1 text-center font-bold">{roomError}</p>}
             </form>
           </div>
+    
 
           {/* Add Card */}
           <div className="bg-[#1a1814] border border-[#3d3326] p-6 rounded shadow-2xl">
@@ -743,6 +914,7 @@ export default function Dashboard() {
                   className="w-20 bg-black/50 border border-[#3d3326] rounded px-2 py-2 text-sm text-[#d4c3a1] focus:outline-none focus:border-[#a67c52] text-center"
                 />
               </div>
+    
               <button type="submit" className="w-full bg-[#3d3326] hover:bg-[#a67c52]/50 text-[#d4c3a1] py-2 rounded text-xs font-bold uppercase transition-colors flex justify-center items-center gap-2">
                 <Plus className="w-4 h-4" /> Adicionar ao Inventário
               </button>
@@ -750,6 +922,7 @@ export default function Dashboard() {
               {message && <p className="text-green-500 text-xs mt-1">{message}</p>}
             </form>
           </div>
+    
 
           {/* Deck Stats */}
            <div className="bg-[#1a1814] border border-[#3d3326] p-6 rounded shadow-2xl">
@@ -759,6 +932,7 @@ export default function Dashboard() {
                   <Eye className="w-3 h-3" /> Ver Baralho
                 </button>
               </div>
+    
 
               <div className="flex flex-col gap-2 mb-4">
                  <div className="flex gap-2">
@@ -805,6 +979,7 @@ export default function Dashboard() {
                      </button>
                    )}
                  </div>
+    
 
                  <form onSubmit={async (e) => {
                     e.preventDefault();
@@ -831,14 +1006,18 @@ export default function Dashboard() {
                     </button>
                  </form>
               </div>
+    
 
               <div className="flex justify-between items-center text-sm border-t border-[#3d3326] pt-2">
                  <span className="text-[#d4c3a1]/60 text-xs uppercase font-bold">Total de Cartas</span>
                  <span className="font-mono text-[#e2b17a] font-bold">{deckIds.length}</span>
               </div>
+    
            </div>
+    
 
         </div>
+    
 
         {/* Right Column: Inventory & Deck Builder */}
         <div className="lg:col-span-2">
@@ -848,6 +1027,7 @@ export default function Dashboard() {
                 <h2 className="text-lg font-bold tracking-tighter text-[#a67c52] uppercase mb-1">Seu Inventário</h2>
                 <p className="text-[10px] uppercase tracking-widest text-[#d4c3a1]/60">Clique em uma carta para adicioná-la ou removê-la do seu baralho ativo.</p>
               </div>
+    
               <button 
                 onClick={() => setShowOnlyDeck(!showOnlyDeck)}
                 className={`text-[10px] uppercase font-bold px-3 py-1.5 rounded transition-colors border ${showOnlyDeck ? 'bg-[#a67c52] text-black border-[#a67c52]' : 'bg-black/50 text-[#e2b17a] border-[#3d3326] hover:border-[#a67c52]'}`}
@@ -855,12 +1035,14 @@ export default function Dashboard() {
                 {showOnlyDeck ? 'Mostrar Todas' : 'Somente no Baralho'}
               </button>
             </div>
+    
             
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             {inventoryGrouped.length === 0 ? (
               <div className="text-center text-[#d4c3a1]/50 py-12 border border-dashed border-[#3d3326] rounded">
                 Nenhuma carta no inventário. Resgate um código para começar.
               </div>
+    
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4">
                 {inventoryGrouped.filter(({ card }) => !showOnlyDeck || (deckCounts[card.id] || 0) > 0).map(({ card, count }) => {
@@ -872,20 +1054,23 @@ export default function Dashboard() {
                     >
                       <div className="relative cursor-pointer w-full group">
                         {inDeckCount > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-[#a67c52] to-[#805e3b] text-black text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#e2b17a]">
+                          <div className="absolute top-1 right-1 bg-gradient-to-r from-[#a67c52] to-[#805e3b] text-black text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#e2b17a]">
                             NO BARALHO: {inDeckCount}
                           </div>
+    
                         )}
-                        <div className="absolute -top-2 -left-2 bg-black text-[#d4c3a1] text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#3d3326]">
+                        <div className="absolute top-1 left-1 bg-black text-[#d4c3a1] text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-lg border border-[#3d3326]">
                           x{count}
                         </div>
+    
                         {card.imageUrl ? (
-                          <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-full aspect-[2/3] object-cover rounded shadow-md border border-[#3d3326]" />
+                          <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="w-full aspect-[2/3] object-contain rounded shadow-md border border-[#3d3326] bg-black/50" />
                         ) : (
                           <div className="w-full aspect-[2/3] bg-[#3d3326] rounded border border-[#a67c52] flex flex-col items-center justify-center p-2 text-center">
                              <span className="text-xs font-bold uppercase">{card.name}</span>
                              <span className="text-xs text-[#a67c52] font-mono mt-1">{card.points} Pts</span>
                           </div>
+    
                         )}
                         
                         {/* Hover Overlay */}
@@ -894,7 +1079,9 @@ export default function Dashboard() {
                            <span className="text-[10px] text-[#d4c3a1]/80 line-clamp-3 italic">{card.description}</span>
                            <span className="text-[10px] text-[#a67c52] font-bold uppercase mt-2">{card.type}</span>
                         </div>
+    
                       </div>
+    
                       
                       {/* Controls */}
                                             <div className="flex mt-2 gap-1 bg-[#1a1814] p-1 rounded border border-[#3d3326]">
@@ -920,16 +1107,24 @@ export default function Dashboard() {
                           +
                         </button>
                       </div>
+    
                     </div>
+    
                   );
                 })}
               </div>
+    
             )}
             </div>
+    
           </div>
+    
         </div>
+    
 
       </div>
+    
     </div>
+    
   );
 }

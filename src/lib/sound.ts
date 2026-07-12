@@ -33,8 +33,9 @@ class SoundManager {
       osc.frequency.setValueAtTime(800, this.audioCtx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(300, this.audioCtx.currentTime + 0.05);
       
-      gainNode.gain.setValueAtTime(0.05, this.audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.05);
+      const vol = parseFloat(localStorage.getItem("sfxVolume") || "0.5");
+      gainNode.gain.setValueAtTime(0.05 * vol, this.audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01 * vol, this.audioCtx.currentTime + 0.05);
       
       osc.connect(gainNode);
       gainNode.connect(this.audioCtx.destination);
@@ -57,8 +58,9 @@ class SoundManager {
       osc.frequency.setValueAtTime(200, this.audioCtx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(50, this.audioCtx.currentTime + 0.1);
       
-      gainNode.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.1);
+      const vol = parseFloat(localStorage.getItem("sfxVolume") || "0.5");
+      gainNode.gain.setValueAtTime(0.1 * vol, this.audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01 * vol, this.audioCtx.currentTime + 0.1);
       
       osc.connect(gainNode);
       gainNode.connect(this.audioCtx.destination);
@@ -83,8 +85,9 @@ class SoundManager {
         osc.frequency.setValueAtTime(freq, t + i * 0.15);
         
         gainNode.gain.setValueAtTime(0, t + i * 0.15);
-        gainNode.gain.linearRampToValueAtTime(0.1, t + i * 0.15 + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, t + i * 0.15 + 0.4);
+        const vol = parseFloat(localStorage.getItem("sfxVolume") || "0.5");
+        gainNode.gain.linearRampToValueAtTime(0.1 * vol, t + i * 0.15 + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01 * vol, t + i * 0.15 + 0.4);
         
         osc.connect(gainNode);
         gainNode.connect(this.audioCtx!.destination);
@@ -110,8 +113,9 @@ class SoundManager {
         osc.frequency.setValueAtTime(freq, t + i * 0.3);
         
         gainNode.gain.setValueAtTime(0, t + i * 0.3);
-        gainNode.gain.linearRampToValueAtTime(0.1, t + i * 0.3 + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, t + i * 0.3 + 0.5);
+        const vol = parseFloat(localStorage.getItem("sfxVolume") || "0.5");
+        gainNode.gain.linearRampToValueAtTime(0.1 * vol, t + i * 0.3 + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01 * vol, t + i * 0.3 + 0.5);
         
         osc.connect(gainNode);
         gainNode.connect(this.audioCtx!.destination);
@@ -137,8 +141,9 @@ class SoundManager {
         osc.frequency.setValueAtTime(freq, t + i * 0.4);
         
         gainNode.gain.setValueAtTime(0, t + i * 0.4);
-        gainNode.gain.linearRampToValueAtTime(0.1, t + i * 0.4 + 0.1);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, t + i * 0.4 + 0.3);
+        const vol = parseFloat(localStorage.getItem("sfxVolume") || "0.5");
+        gainNode.gain.linearRampToValueAtTime(0.1 * vol, t + i * 0.4 + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.01 * vol, t + i * 0.4 + 0.3);
         
         osc.connect(gainNode);
         gainNode.connect(this.audioCtx!.destination);

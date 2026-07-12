@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { TutorialOverlay } from '../components/TutorialOverlay';
-import { determineBotMove } from '../lib/botAI';
+import { determineBotMove, updateAdaptiveBotLearning } from '../lib/botAI';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, getDoc, arrayUnion, addDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc, getDocs, arrayUnion, addDoc, collection } from "firebase/firestore";
 import { db } from '../lib/firebase';
 import { loadAllCards, getCachedCard, getAllCachedCards } from '../lib/cardsCache';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,9 +11,11 @@ import { GameState, Card, GamePlayerState } from '../types';
 import { soundManager } from '../lib/sound';
 const dummySoundHook = () => {
 }
-import { ArrowLeft, Flag, Check, UserPlus, Eye, Swords, X, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Flag, Check, UserPlus, Eye, Swords, X, MessageSquare, Volume2 } from 'lucide-react';
 import { ChatPanel } from '../components/ChatPanel';
 import { CardModal } from '../components/CardModal';
+import { AudioSettingsModal } from '../components/AudioSettingsModal';
+import { useAudio } from '../contexts/AudioContext';
 import { cn } from '../lib/utils';
 
 
@@ -37,6 +40,7 @@ export const getCardPoints = (
   globalRangedTraps: number = 0,
   allActiveCards: Card[] = []
 ) => {
+  if (card.isFacedown) return 0;
   let pts = card.points || 0;
   const isHero = card.effects?.includes('Herói');
   const hasClima = scenario1?.effects?.includes('Clima') || scenario2?.effects?.includes('Clima');
@@ -46,12 +50,12 @@ export const getCardPoints = (
   }
 
   if (card.effects?.includes('Vínculo Estreito')) {
-    const sameCards = row.filter(c => c.name === card.name).length;
+    const sameCards = row.filter(c => c.name === card.name && !c.isFacedown).length;
     pts = pts * sameCards;
   }
 
   if (!isHero) {
-    const moraleBoosters = row.filter(c => c !== card && c.effects?.includes('Impulso Moral')).length;
+    const moraleBoosters = row.filter(c => c !== card && !c.isFacedown && c.effects?.includes('Impulso Moral')).length;
     pts += moraleBoosters;
     
     let specificBuffs = 0;
@@ -137,11 +141,56 @@ export const calculateScore = (player: GamePlayerState | null, opp: GamePlayerSt
 export default function GameBoard() {
   const { gameId } = useParams();
   const { userData } = useAuth();
+  const { setCurrentPlaylist, config } = useAudio();
   const navigate = useNavigate();
   const [selectedCardModal, setSelectedCardModal] = useState<Card | null>(null);
   const [targetingAssassinSpy, setTargetingAssassinSpy] = useState<{ spyCard: Card, targetRow: "melee" | "ranged" } | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
+
+  useEffect(() => {
+    if (gameState?.isBotMatch && gameState?.campaignId && config.campaignMusic?.[gameState.campaignId] && config.campaignMusic[gameState.campaignId].length > 0) {
+      setCurrentPlaylist(config.campaignMusic[gameState.campaignId]);
+    } else if (config.battleMusic && config.battleMusic.length > 0) {
+      setCurrentPlaylist(config.battleMusic);
+    }
+    return () => setCurrentPlaylist(null);
+  }, [config.battleMusic, setCurrentPlaylist, gameState?.isBotMatch, gameState?.campaignId, config.campaignMusic]);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [roundOverlay, setRoundOverlay] = useState<{show: boolean, message: string, color: string}>({ show: false, message: '', color: '' });
+  
+  // Watch for round changes
+  useEffect(() => {
+     if (!gameState?.round) return;
+     if (gameState.status !== 'playing') return;
+     
+     let msg = `RODADA ${gameState.round}`;
+     let color = 'text-[#e2b17a]';
+     
+     if (gameState.round > 1) {
+         const p1Rounds = gameState.player1.roundsWon || 0;
+         const p2Rounds = gameState.player2?.roundsWon || 0;
+         const myRounds = gameState.player1.uid === userData?.uid ? p1Rounds : p2Rounds;
+         const oppRounds = gameState.player1.uid === userData?.uid ? p2Rounds : p1Rounds;
+         
+         if (myRounds > 0 && oppRounds === 0) {
+            msg = `RODADA VENCIDA`;
+            color = 'text-green-500';
+         } else if (oppRounds > 0 && myRounds === 0) {
+            msg = `RODADA PERDIDA`;
+            color = 'text-red-500';
+         } else if (myRounds === 1 && oppRounds === 1 && gameState.round === 3) {
+            msg = `RODADA FINAL`;
+            color = 'text-[#e2b17a]';
+         }
+     }
+     
+     setRoundOverlay({ show: true, message: msg, color });
+     const t = setTimeout(() => {
+        setRoundOverlay({ show: false, message: '', color: '' });
+     }, 3000);
+     return () => clearTimeout(t);
+  }, [gameState?.round, gameState?.status, gameState?.player1.roundsWon, gameState?.player2?.roundsWon]);
 
   useEffect(() => {
     if (gameState?.status === 'finished') {
@@ -165,11 +214,6 @@ export default function GameBoard() {
       }
     }, (err) => console.error('Error in games listener:', err));
   
-  const handleTargetEnemy = (enemyCard: Card) => {
-    if (!targetingAssassinSpy) return;
-    playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
-    setTargetingAssassinSpy(null);
-  };
 
   return (
 ) => unsub();
@@ -223,7 +267,7 @@ export default function GameBoard() {
        const p2Score = calculateScore(gameState.player2, gameState.player1);
        
        let p1Rounds = gameState.player1.roundsWon || 0;
-       let p2Rounds = gameState.player2.roundsWon || 0;
+       let p2Rounds = gameState.player2?.roundsWon || 0;
 
        if (p1Score > p2Score) p1Rounds++;
        else if (p2Score > p1Score) p2Rounds++;
@@ -248,6 +292,9 @@ export default function GameBoard() {
                if (gameState.player2.board.scenario) p2Graveyard.push(gameState.player2.board.scenario);
            }
 
+           if (gameState.isBotMatch && gameState.botDifficulty === 'adaptive') {
+               await updateAdaptiveBotLearning(gameState, winnerId);
+           }
            updateDoc(doc(db, 'games', gameId!), {
              status: 'finished',
              winner: winnerId,
@@ -286,8 +333,61 @@ export default function GameBoard() {
                     if (!history.find((h: any) => h.gameId === gameId)) {
                         history.unshift(newRecord);
                         const top5 = history.slice(0, 5);
+                        
+                        // Add cruzeiros
+                        let currentCruzeiros = uData.cruzeiros || 0;
+                        let reward = 0;
+                        let rConfig: any = {
+                          botWin: 20, botDraw: 5, botLoss: 5,
+                          pvpWin: 50, pvpDraw: 20, pvpLoss: 10,
+                          tournamentWin: 100, tournamentDraw: 0, tournamentLoss: 0
+                        };
+                        try {
+                           const sysDoc = await getDoc(doc(db, 'system', 'rewards'));
+                           if (sysDoc.exists()) {
+                             rConfig = { ...rConfig, ...sysDoc.data() };
+                           }
+                        } catch(e) {}
+                        
+                        const snap = await getDocs(collection(db, "tournament_npcs"));
+                        const npcNames = snap.empty ? [
+                          "O Pai de familia",
+                          "Devedor de Pensão",
+                          "Mordedor",
+                          "Quer X-Tudo",
+                          "Quer X-Bacon",
+                          "O Batata"
+                        ] : snap.docs.sort((a: any, b: any) => a.data().order - b.data().order).map(d => d.data().name);
+
+                        const isTournament = gameState.isBotMatch && npcNames.includes(opponent.username);
+                        const isBot = gameState.isBotMatch && !isTournament;
+
+                        if (isTournament) {
+                           if (result === 'win') reward = rConfig.tournamentWin;
+                           else if (result === 'draw') reward = rConfig.tournamentDraw;
+                           else reward = rConfig.tournamentLoss;
+                        } else if (isBot) {
+                           if (result === 'win') reward = rConfig.botWin;
+                           else if (result === 'draw') reward = rConfig.botDraw;
+                           else reward = rConfig.botLoss;
+                        } else {
+                           if (result === 'win') reward = rConfig.pvpWin;
+                           else if (result === 'draw') reward = rConfig.pvpDraw;
+                           else reward = rConfig.pvpLoss;
+                        }
+                        
+                        currentCruzeiros += reward;
+                        let newProgress = uData.tournamentProgress || 1;
+                        if (result === 'win' && isTournament) {
+                           const npcIndex = npcNames.indexOf(opponent.username);
+                           if (npcIndex !== -1 && npcIndex + 1 === newProgress) {
+                               newProgress++;
+                           }
+                        }
                         await updateDoc(doc(db, 'users', myId), {
-                            matchHistory: top5
+                            matchHistory: top5,
+                            tournamentProgress: newProgress,
+                            cruzeiros: currentCruzeiros
                         });
                     }
                  }
@@ -357,7 +457,20 @@ export default function GameBoard() {
         }
 
         // Bot decide jogada com IA
-        const { cardIndex: chosenIndex, pass: botDecidesToPass } = determineBotMove(gameState);
+        const { cardIndex: chosenIndex, pass: botDecidesToPass } = await determineBotMove(gameState);
+        // Provocation logic
+        if (Math.random() < 0.2) {
+          const provocations = ["Vou esmagar você!", "Isso é o melhor que pode fazer?", "A vitória já é minha!", "Patético...", "Suas cartas são fracas demais.", "Desista enquanto há tempo!", "Você não tem chance contra mim.", "Previsível...", "Essa foi sua jogada? Hahaha!"];
+          const msg = provocations[Math.floor(Math.random() * provocations.length)];
+          const newMsg = {
+             id: Date.now().toString() + Math.random(),
+             senderId: "bot",
+             senderName: gameState.player2.username,
+             text: msg,
+             timestamp: new Date().toISOString()
+          };
+          updateData.chatMessages = arrayUnion(newMsg);
+        }
         
         if (botDecidesToPass || chosenIndex === null) {
            updateData['player2.passed'] = true;
@@ -379,7 +492,10 @@ export default function GameBoard() {
         }
 
         const cardIndex = chosenIndex;
-        const cardToPlay = botState.hand[cardIndex];
+        const cardToPlay = { ...botState.hand[cardIndex] };
+        if (cardToPlay.type === 'Trap') {
+          cardToPlay.isFacedown = true;
+        }
         
         let targetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
         if (cardToPlay.type === 'Ranged') targetRow = 'ranged';
@@ -405,11 +521,13 @@ export default function GameBoard() {
         let isAssassinSpy = cardToPlay.effects?.includes('Espião Assassino');
         let isMedic = cardToPlay.effects?.includes('Médico');
         let isScorch = cardToPlay.effects?.includes('Queimar');
+        let isDinheiroJuros = cardToPlay.effects?.includes('Dinheiro a Juros');
         let shouldDraw = 0;
         if (cardToPlay.effects?.includes('Comprar 1')) shouldDraw += 1;
         if (cardToPlay.effects?.includes('Comprar 2')) shouldDraw += 2;
         if (isSpy) shouldDraw += 2;
-    if (isAssassinSpy) shouldDraw += 2; // Assume it also draws 2, or maybe not? user said 'jogue a carta no campo do adversário mas obriga o adversário a jogar uma carta do campo dele pro cemitério'. We will NOT draw 2, so it's a balanced spy: just kills an enemy card.
+    if (isAssassinSpy) shouldDraw += 2;
+    if (isDinheiroJuros) shouldDraw += 2; // Assume it also draws 2, or maybe not? user said 'jogue a carta no campo do adversário mas obriga o adversário a jogar uma carta do campo dele pro cemitério'. We will NOT draw 2, so it's a balanced spy: just kills an enemy card.
         
         if (targetRow === 'discard') {
           newGraveyard.push(cardToPlay);
@@ -422,12 +540,80 @@ export default function GameBoard() {
             updatedPlayer1.board.scenario = null;
           }
           newBoard.scenario = cardToPlay;
-        } else if ((isSpy || isAssassinSpy) && updatedPlayer1) {
+        } else if ((isSpy || isAssassinSpy || cardToPlay.effects?.includes('Ladrão') || isDinheiroJuros) && updatedPlayer1) {
           updatedPlayer1.board[targetRow] = [...(updatedPlayer1.board[targetRow] || []), cardToPlay];
         } else {
           newBoard[targetRow] = [...(newBoard[targetRow] || []), cardToPlay];
         }
         
+        if (cardToPlay.effects?.includes('Ladrão') && updatedPlayer1) {
+          if (updatedPlayer1.hand.length > 0) {
+            const randomIndex = Math.floor(Math.random() * updatedPlayer1.hand.length);
+            const stolenCard = updatedPlayer1.hand.splice(randomIndex, 1)[0];
+            newHand.push(stolenCard);
+          }
+        }
+        
+        if (isDinheiroJuros && updatedPlayer1) {
+          if (updatedPlayer1.deck.length > 0) {
+            const drawnOppCard = updatedPlayer1.deck.shift();
+            if (drawnOppCard) {
+              let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
+              if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
+              if (drawnOppCard.type === 'Cenário' || drawnOppCard.type === 'Scenario' || drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'scenario';
+              if (drawnOppCard.type === 'Magic' || drawnOppCard.type === 'Heal' || drawnOppCard.type === 'Event') {
+                 if (!drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'discard';
+              }
+              
+              if (oppTargetRow === 'discard') {
+                updatedPlayer1.graveyard.push(drawnOppCard);
+              } else if (oppTargetRow === 'scenario') {
+                if (updatedPlayer1.board.scenario) updatedPlayer1.graveyard.push(updatedPlayer1.board.scenario);
+                if (newBoard.scenario) {
+                  newGraveyard.push(newBoard.scenario);
+                  newBoard.scenario = null;
+                }
+                updatedPlayer1.board.scenario = drawnOppCard;
+              } else {
+                let oppIsSpy = drawnOppCard.effects?.includes('Espião') || drawnOppCard.effects?.includes('Espião Assassino') || drawnOppCard.effects?.includes('Ladrão') || drawnOppCard.effects?.includes('Dinheiro a Juros');
+                if (oppIsSpy) {
+                  newBoard[oppTargetRow] = [...(newBoard[oppTargetRow] || []), drawnOppCard];
+                } else {
+                  updatedPlayer1.board[oppTargetRow] = [...(updatedPlayer1.board[oppTargetRow] || []), drawnOppCard];
+                }
+              }
+            }
+          } else if (updatedPlayer1.hand.length > 0) {
+            const randomIndex = Math.floor(Math.random() * updatedPlayer1.hand.length);
+            const drawnOppCard = updatedPlayer1.hand.splice(randomIndex, 1)[0];
+            if (drawnOppCard) {
+              let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
+              if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
+              if (drawnOppCard.type === 'Cenário' || drawnOppCard.type === 'Scenario' || drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'scenario';
+              if (drawnOppCard.type === 'Magic' || drawnOppCard.type === 'Heal' || drawnOppCard.type === 'Event') {
+                 if (!drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'discard';
+              }
+              
+              if (oppTargetRow === 'discard') {
+                updatedPlayer1.graveyard.push(drawnOppCard);
+              } else if (oppTargetRow === 'scenario') {
+                if (updatedPlayer1.board.scenario) updatedPlayer1.graveyard.push(updatedPlayer1.board.scenario);
+                if (newBoard.scenario) {
+                  newGraveyard.push(newBoard.scenario);
+                  newBoard.scenario = null;
+                }
+                updatedPlayer1.board.scenario = drawnOppCard;
+              } else {
+                let oppIsSpy = drawnOppCard.effects?.includes('Espião') || drawnOppCard.effects?.includes('Espião Assassino') || drawnOppCard.effects?.includes('Ladrão') || drawnOppCard.effects?.includes('Dinheiro a Juros');
+                if (oppIsSpy) {
+                  newBoard[oppTargetRow] = [...(newBoard[oppTargetRow] || []), drawnOppCard];
+                } else {
+                  updatedPlayer1.board[oppTargetRow] = [...(updatedPlayer1.board[oppTargetRow] || []), drawnOppCard];
+                }
+              }
+            }
+          }
+        }
     
     if (isAssassinSpy && updatedPlayer1) {
       const pMeleeBuffs = countGlobalBuff(newBoard, 'Buff de área melee');
@@ -627,6 +813,11 @@ export default function GameBoard() {
     const cardIndex = me.hand.findIndex(c => c.id === card.id);
     if (cardIndex === -1) return;
     
+    let playedCard = { ...card };
+    if (playedCard.type === 'Trap') {
+      playedCard.isFacedown = true;
+    }
+
     let newHand = [...me.hand];
     newHand.splice(cardIndex, 1);
     
@@ -648,19 +839,22 @@ export default function GameBoard() {
     
     const updateData: any = {};
     
-    let isSpy = card.effects?.includes('Espião');
-    let isAssassinSpy = card.effects?.includes('Espião Assassino');
-    let isMedic = card.effects?.includes('Médico');
-    let isScorch = card.effects?.includes('Queimar');
-    
+        const isTrap = playedCard.type === 'Trap';
+    let isSpy = isTrap ? false : card.effects?.includes('Espião');
+    let isAssassinSpy = isTrap ? false : card.effects?.some((e: string) => e.includes('Espião Assassino'));
+    let isMedic = isTrap ? false : card.effects?.includes('Médico');
+    let isScorch = isTrap ? false : card.effects?.includes('Queimar');
+    let isThief = isTrap ? false : card.effects?.includes('Ladrão');
+    let isDinheiroJuros = isTrap ? false : card.effects?.includes('Dinheiro a Juros');
+
     let shouldDraw = 0;
-    if (card.effects?.includes('Comprar 1')) shouldDraw += 1;
-    if (card.effects?.includes('Comprar 2')) shouldDraw += 2;
+    if (!isTrap && card.effects?.includes('Comprar 1')) shouldDraw += 1;
+    if (!isTrap && card.effects?.includes('Comprar 2')) shouldDraw += 2;
     if (isSpy) shouldDraw += 2;
     if (isAssassinSpy) shouldDraw += 2; // Assume it also draws 2, or maybe not? user said 'jogue a carta no campo do adversário mas obriga o adversário a jogar uma carta do campo dele pro cemitério'. We will NOT draw 2, so it's a balanced spy: just kills an enemy card.
 
     if (targetRow === 'discard') {
-      newGraveyard.push(card);
+      newGraveyard.push(playedCard);
     } else if (targetRow === 'scenario') {
       if (newBoard.scenario) {
         newGraveyard.push(newBoard.scenario);
@@ -669,11 +863,11 @@ export default function GameBoard() {
         updatedOpponent.graveyard.push(updatedOpponent.board.scenario);
         updatedOpponent.board.scenario = null;
       }
-      newBoard.scenario = card;
-    } else if ((isSpy || isAssassinSpy) && updatedOpponent) {
-      updatedOpponent.board[targetRow] = [...(updatedOpponent.board[targetRow] || []), card];
+      newBoard.scenario = playedCard;
+    } else if ((isSpy || isAssassinSpy || isThief) && updatedOpponent) {
+      updatedOpponent.board[targetRow] = [...(updatedOpponent.board[targetRow] || []), playedCard];
     } else {
-      newBoard[targetRow] = [...(newBoard[targetRow] || []), card];
+      newBoard[targetRow] = [...(newBoard[targetRow] || []), playedCard];
     }
     
 
@@ -696,6 +890,54 @@ export default function GameBoard() {
           }
           return true;
         });
+      }
+    }
+    if (isThief && updatedOpponent) {
+      if (updatedOpponent.hand.length > 0) {
+        const randomIndex = Math.floor(Math.random() * updatedOpponent.hand.length);
+        const stolenCard = updatedOpponent.hand.splice(randomIndex, 1)[0];
+        newHand.push(stolenCard);
+      }
+    }
+        if (isMedic && newGraveyard.length > 0) {
+      const revivable = newGraveyard.filter(c => !c.effects?.includes('Herói'));
+      if (revivable.length > 0) {
+        revivable.sort((a, b) => (b.points || 0) - (a.points || 0));
+        const revivedCard = revivable[0];
+        newGraveyard = newGraveyard.filter(c => c.id !== revivedCard.id);
+        newHand.push(revivedCard);
+      }
+    }
+
+    if (isDinheiroJuros && updatedOpponent) {
+      if (updatedOpponent.deck.length > 0) {
+        const drawnOppCard = updatedOpponent.deck.shift();
+        if (drawnOppCard) {
+          let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
+          if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
+          if (drawnOppCard.type === 'Cenário' || drawnOppCard.type === 'Scenario' || drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'scenario';
+          if (drawnOppCard.type === 'Magic' || drawnOppCard.type === 'Heal' || drawnOppCard.type === 'Event') {
+             if (!drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'discard';
+          }
+          
+          if (oppTargetRow === 'discard') {
+            updatedOpponent.graveyard.push(drawnOppCard);
+          } else if (oppTargetRow === 'scenario') {
+            if (updatedOpponent.board.scenario) updatedOpponent.graveyard.push(updatedOpponent.board.scenario);
+            if (newBoard.scenario) {
+              newGraveyard.push(newBoard.scenario);
+              newBoard.scenario = null;
+            }
+            updatedOpponent.board.scenario = drawnOppCard;
+          } else {
+            let oppIsSpy = drawnOppCard.effects?.includes('Espião') || drawnOppCard.effects?.includes('Espião Assassino') || drawnOppCard.effects?.includes('Ladrão');
+            if (oppIsSpy) {
+              newBoard[oppTargetRow] = [...(newBoard[oppTargetRow] || []), drawnOppCard];
+            } else {
+              updatedOpponent.board[oppTargetRow] = [...(updatedOpponent.board[oppTargetRow] || []), drawnOppCard];
+            }
+          }
+        }
       }
     }
 
@@ -847,7 +1089,7 @@ export default function GameBoard() {
 
   const requestRematch = async () => {
     if (!userData?.deck || userData.deck.length < 10) {
-       alert('Você precisa de pelo menos 10 cartas no baralho para jogar.');
+       console.log('Você precisa de pelo menos 10 cartas no baralho para jogar.');
        return;
     }
     try {
@@ -934,13 +1176,13 @@ export default function GameBoard() {
        }
     } catch (e) {
        console.error(e);
-       alert('Erro ao solicitar revanche.');
+       console.log('Erro ao solicitar revanche.');
     }
   };
 
   const acceptRematch = async () => {
     if (!userData?.deck || userData.deck.length < 10) {
-      alert('Você precisa de 10 cartas no baralho para jogar!');
+      console.log('Você precisa de 10 cartas no baralho para jogar!');
       return;
     }
     if (!gameState.rematchGameId) return;
@@ -955,13 +1197,250 @@ export default function GameBoard() {
     } catch(e) { console.error(e); }
   };
 
-  if (gameState.status === 'challenge') {
-  
   const handleTargetEnemy = (enemyCard: Card) => {
     if (!targetingAssassinSpy) return;
     playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
     setTargetingAssassinSpy(null);
   };
+
+  const activateTrap = async (card: Card, owner: 'me' | 'opponent', targetRow: 'melee' | 'ranged' | 'scenario') => {
+    if (!userData || !gameState || !gameId) return;
+
+    if (owner !== 'me') return; // Can only flip own traps
+
+    let newBoard = { ...me.board };
+    let newHand = [...me.hand];
+    let newDeck = [...(me.deck || [])];
+    let newGraveyard = [...(me.graveyard || [])];
+
+    let updatedOpponent = opponent ? { 
+      ...opponent, 
+      board: { ...opponent.board }, 
+      graveyard: [...(opponent.graveyard || [])], 
+      hand: [...opponent.hand], 
+      deck: [...opponent.deck] 
+    } : null;
+
+    // Find and flip the card in the correct row
+    if (targetRow === 'scenario') {
+      if (newBoard.scenario && newBoard.scenario.id === card.id) {
+        newBoard.scenario = { ...newBoard.scenario, isFacedown: false };
+      }
+    } else {
+      newBoard[targetRow] = newBoard[targetRow].map((c: Card) => {
+        if (c.id === card.id && c.isFacedown) {
+          return { ...c, isFacedown: false };
+        }
+        return c;
+      });
+    }
+
+    // Apply effects
+    let isScorch = card.effects?.includes('Queimar');
+    let isThief = card.effects?.includes('Ladrão');
+    let isDinheiroJuros = card.effects?.includes('Dinheiro a Juros');
+    let isAssassinSpy = card.effects?.some((e: string) => e.includes('Espião Assassino'));
+
+    if (isAssassinSpy && updatedOpponent) {
+      let highestPts = -1;
+      let targetCard: any = null;
+      let targetRow2: any = null;
+      
+      const pMeleeBuffs = countGlobalBuff(newBoard, 'Buff de área melee');
+      const pRangedBuffs = countGlobalBuff(newBoard, 'Buff de área ranged');
+      const oMeleeBuffs = countGlobalBuff(updatedOpponent?.board, 'Buff de área melee');
+      const oRangedBuffs = countGlobalBuff(updatedOpponent?.board, 'Buff de área ranged');
+      const pMeleeTraps = countGlobalBuff(newBoard, 'Trap campo melee');
+      const pRangedTraps = countGlobalBuff(newBoard, 'Trap campo Ranged');
+      const oMeleeTraps = countGlobalBuff(updatedOpponent?.board, 'Trap campo melee');
+      const oRangedTraps = countGlobalBuff(updatedOpponent?.board, 'Trap campo Ranged');
+      const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
+      const globalRangedBuffs = pRangedBuffs + oRangedBuffs;
+      const globalMeleeTraps = pMeleeTraps + oMeleeTraps;
+      const globalRangedTraps = pRangedTraps + oRangedTraps;
+
+      const getPoints = (c: any, row: any, sc1: any, sc2: any) => getCardPoints(c, row, sc1, sc2, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards);
+
+      updatedOpponent.board.melee.forEach((c: any) => {
+        const pts = getPoints(c, updatedOpponent.board.melee, updatedOpponent.board.scenario, newBoard.scenario);
+        if (!c.effects?.includes('Herói') && pts > highestPts) {
+          highestPts = pts;
+          targetCard = c;
+          targetRow2 = 'melee';
+        }
+      });
+      updatedOpponent.board.ranged.forEach((c: any) => {
+        const pts = getPoints(c, updatedOpponent.board.ranged, updatedOpponent.board.scenario, newBoard.scenario);
+        if (!c.effects?.includes('Herói') && pts > highestPts) {
+          highestPts = pts;
+          targetCard = c;
+          targetRow2 = 'ranged';
+        }
+      });
+
+      if (targetCard && targetRow2) {
+        updatedOpponent.board[targetRow2] = updatedOpponent.board[targetRow2].filter((c: any) => c.id !== targetCard.id);
+        updatedOpponent.graveyard.push(targetCard);
+      }
+    }
+    
+    let shouldDraw = 0;
+    if (card.effects?.includes('Comprar 1')) shouldDraw += 1;
+    if (card.effects?.includes('Comprar 2')) shouldDraw += 2;
+    if (isAssassinSpy) shouldDraw += 2;
+
+    if (isThief && updatedOpponent) {
+      if (updatedOpponent.hand.length > 0) {
+        const randomIndex = Math.floor(Math.random() * updatedOpponent.hand.length);
+        const stolenCard = updatedOpponent.hand.splice(randomIndex, 1)[0];
+        newHand.push(stolenCard);
+      }
+    }
+
+    if (isDinheiroJuros && updatedOpponent) {
+      if (updatedOpponent.deck.length > 0) {
+        const drawnOppCard = updatedOpponent.deck.shift();
+        if (drawnOppCard) {
+          let oppTargetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
+          if (drawnOppCard.type === 'Ranged') oppTargetRow = 'ranged';
+          if (drawnOppCard.type === 'Cenário' || drawnOppCard.type === 'Scenario' || drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'scenario';
+          if (drawnOppCard.type === 'Magic' || drawnOppCard.type === 'Heal' || drawnOppCard.type === 'Event') {
+             if (!drawnOppCard.effects?.includes('Clima')) oppTargetRow = 'discard';
+          }
+          
+          if (oppTargetRow === 'discard') {
+            updatedOpponent.graveyard.push(drawnOppCard);
+          } else if (oppTargetRow === 'scenario') {
+            if (updatedOpponent.board.scenario) updatedOpponent.graveyard.push(updatedOpponent.board.scenario);
+            if (newBoard.scenario) {
+              newGraveyard.push(newBoard.scenario);
+              newBoard.scenario = null;
+            }
+            updatedOpponent.board.scenario = drawnOppCard;
+          } else {
+            let oppIsSpy = drawnOppCard.effects?.includes('Espião') || drawnOppCard.effects?.includes('Espião Assassino') || drawnOppCard.effects?.includes('Ladrão');
+            if (oppIsSpy) {
+              newBoard[oppTargetRow] = [...(newBoard[oppTargetRow] || []), drawnOppCard];
+            } else {
+              updatedOpponent.board[oppTargetRow] = [...(updatedOpponent.board[oppTargetRow] || []), drawnOppCard];
+            }
+          }
+        }
+      }
+    }
+
+    if (isScorch) {
+      const pMeleeBuffs = countGlobalBuff(newBoard, 'Buff de área melee');
+      const pRangedBuffs = countGlobalBuff(newBoard, 'Buff de área ranged');
+      const oMeleeBuffs = countGlobalBuff(updatedOpponent?.board, 'Buff de área melee');
+      const oRangedBuffs = countGlobalBuff(updatedOpponent?.board, 'Buff de área ranged');
+      
+      const pMeleeTraps = countGlobalBuff(newBoard, 'Trap campo melee');
+      const pRangedTraps = countGlobalBuff(newBoard, 'Trap campo Ranged');
+      const oMeleeTraps = countGlobalBuff(updatedOpponent?.board, 'Trap campo melee');
+      const oRangedTraps = countGlobalBuff(updatedOpponent?.board, 'Trap campo Ranged');
+      
+      const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
+      const globalRangedBuffs = pRangedBuffs + oRangedBuffs;
+      const globalMeleeTraps = pMeleeTraps + oMeleeTraps;
+      const globalRangedTraps = pRangedTraps + oRangedTraps;
+
+      const getPoints = (c: any, row: any, sc1: any, sc2: any) => getCardPoints(c, row, sc1, sc2, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards);
+
+      let highestPoints = -1;
+      
+      newBoard.melee.forEach(c => {
+        const pts = getPoints(c, newBoard.melee, newBoard.scenario, updatedOpponent?.board.scenario);
+        if (!c.effects?.includes('Herói') && pts > highestPoints) highestPoints = pts;
+      });
+      newBoard.ranged.forEach(c => {
+        const pts = getPoints(c, newBoard.ranged, newBoard.scenario, updatedOpponent?.board.scenario);
+        if (!c.effects?.includes('Herói') && pts > highestPoints) highestPoints = pts;
+      });
+      if (updatedOpponent) {
+        updatedOpponent.board.melee.forEach(c => {
+          const pts = getPoints(c, updatedOpponent.board.melee, updatedOpponent.board.scenario, newBoard.scenario);
+          if (!c.effects?.includes('Herói') && pts > highestPoints) highestPoints = pts;
+        });
+        updatedOpponent.board.ranged.forEach(c => {
+          const pts = getPoints(c, updatedOpponent.board.ranged, updatedOpponent.board.scenario, newBoard.scenario);
+          if (!c.effects?.includes('Herói') && pts > highestPoints) highestPoints = pts;
+        });
+      }
+
+      if (highestPoints > 0) {
+        newBoard.melee = newBoard.melee.filter(c => {
+          const pts = getPoints(c, newBoard.melee, newBoard.scenario, updatedOpponent?.board.scenario);
+          if (!c.effects?.includes('Herói') && pts === highestPoints) {
+            newGraveyard.push(c);
+            return false;
+          }
+          return true;
+        });
+        newBoard.ranged = newBoard.ranged.filter(c => {
+          const pts = getPoints(c, newBoard.ranged, newBoard.scenario, updatedOpponent?.board.scenario);
+          if (!c.effects?.includes('Herói') && pts === highestPoints) {
+            newGraveyard.push(c);
+            return false;
+          }
+          return true;
+        });
+        if (updatedOpponent) {
+          updatedOpponent.board.melee = updatedOpponent.board.melee.filter(c => {
+            const pts = getPoints(c, updatedOpponent.board.melee, updatedOpponent.board.scenario, newBoard.scenario);
+            if (!c.effects?.includes('Herói') && pts === highestPoints) {
+              updatedOpponent.graveyard.push(c);
+              return false;
+            }
+            return true;
+          });
+          updatedOpponent.board.ranged = updatedOpponent.board.ranged.filter(c => {
+            const pts = getPoints(c, updatedOpponent.board.ranged, updatedOpponent.board.scenario, newBoard.scenario);
+            if (!c.effects?.includes('Herói') && pts === highestPoints) {
+              updatedOpponent.graveyard.push(c);
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+    }
+
+    for (let i = 0; i < shouldDraw; i++) {
+      if (newDeck.length > 0) {
+        newHand.push(newDeck.shift()!);
+      }
+    }
+
+    const playerKey = isPlayer1 ? 'player1' : 'player2';
+    const opponentKey = isPlayer1 ? 'player2' : 'player1';
+
+    const updateData: any = {
+      [`${playerKey}.board`]: newBoard,
+      [`${playerKey}.hand`]: newHand,
+      [`${playerKey}.deck`]: newDeck,
+      [`${playerKey}.graveyard`]: newGraveyard
+    };
+
+    if (updatedOpponent) {
+      updateData[`${opponentKey}.board`] = updatedOpponent.board;
+      updateData[`${opponentKey}.hand`] = updatedOpponent.hand;
+      updateData[`${opponentKey}.deck`] = updatedOpponent.deck;
+      updateData[`${opponentKey}.graveyard`] = updatedOpponent.graveyard;
+    }
+
+    try {
+      soundManager.playCardPlay(); // Play sound when flipped
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      await updateDoc(doc(db, 'games', gameId), updateData);
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  if (gameState.status === 'challenge') {
+  
 
   return (
 
@@ -978,11 +1457,6 @@ export default function GameBoard() {
 
   if (gameState.status === 'declined') {
   
-  const handleTargetEnemy = (enemyCard: Card) => {
-    if (!targetingAssassinSpy) return;
-    playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
-    setTargetingAssassinSpy(null);
-  };
 
   return (
 
@@ -998,11 +1472,6 @@ export default function GameBoard() {
 
   if (gameState.status === 'waiting') {
   
-  const handleTargetEnemy = (enemyCard: Card) => {
-    if (!targetingAssassinSpy) return;
-    playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
-    setTargetingAssassinSpy(null);
-  };
 
   return (
 
@@ -1025,24 +1494,52 @@ export default function GameBoard() {
   }
 
   const renderCard = (card: Card, keySuffix: string | number = '', onClick?: () => void, modifiedPoints?: number, location: 'board' | 'hand' = 'board') => {
+    if (card.isFacedown) {
+      return (
+        <motion.div 
+          key={`${card.id}-${keySuffix}`}
+          layout
+          initial={{ opacity: 0, scale: 0.8, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.8, filter: "blur(4px)" }}
+          whileHover={onClick ? { y: -10, scale: 1.05 } : {}}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          onClick={onClick}
+          className={cn(
+            `relative ${location === 'hand' ? 'w-20 h-28 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
+            onClick && "cursor-pointer hover:border-[#e2b17a] hover:shadow-[0_0_15px_rgba(226,177,122,0.5)] transition-colors duration-300"
+          )}
+        >
+          {card.backImageUrl ? (
+            <img src={card.backImageUrl} referrerPolicy="no-referrer" alt="Facedown" className="absolute inset-0 w-full h-full object-cover opacity-90" />
+          ) : (
+            <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-[#1a1814]">
+              <div className="text-[#a67c52] text-xl font-bold tracking-widest opacity-30">?</div>
+            </div>
+          )}
+        </motion.div>
+      );
+    }
+
     const pts = modifiedPoints !== undefined ? modifiedPoints : card.points;
     const isBuffed = pts > card.points;
     const isDebuffed = pts < card.points;
   
-  const handleTargetEnemy = (enemyCard: Card) => {
-    if (!targetingAssassinSpy) return;
-    playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
-    setTargetingAssassinSpy(null);
-  };
 
   return (
 
-    <div 
-      key={`${card.id}-${keySuffix}`} 
+    <motion.div 
+      key={`${card.id}-${keySuffix}`}
+      layout
+      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, filter: "blur(4px)" }}
+      whileHover={onClick ? { y: -10, scale: 1.05 } : {}}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
       onClick={onClick}
       className={cn(
-        `relative ${location === 'hand' ? 'w-16 h-24 sm:w-20 sm:h-28 md:w-24 md:h-32' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
-        onClick && "cursor-pointer hover:-translate-y-4 hover:border-[#e2b17a] hover:shadow-[0_0_15px_rgba(226,177,122,0.5)] transition-all duration-300"
+        `relative ${location === 'hand' ? 'w-20 h-28 sm:w-24 sm:h-36 md:w-28 md:h-40' : 'w-12 h-16 sm:w-20 sm:h-28 md:w-24 md:h-32'} bg-[#3d3326] border sm:border-2 border-[#a67c52] rounded-md overflow-hidden group shadow-2xl flex flex-col shrink-0`,
+        onClick && "cursor-pointer hover:border-[#e2b17a] hover:shadow-[0_0_15px_rgba(226,177,122,0.5)] transition-colors duration-300"
       )}
     >
       <div className={cn("absolute left-1 top-1 w-4 h-4 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-bold shadow-inner z-10 border border-black/50", isBuffed ? "bg-green-500 text-white" : isDebuffed ? "bg-red-500 text-white" : "bg-[#a67c52] text-black")}>
@@ -1053,7 +1550,7 @@ export default function GameBoard() {
       </div>
 
       {card.imageUrl ? (
-        <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+        <img src={card.imageUrl} referrerPolicy="no-referrer" alt={card.name} className="absolute inset-0 w-full h-full object-contain opacity-80" />
       ) : (
          <div className="absolute inset-0 w-full h-full flex items-center justify-center text-[8px] opacity-30">Sem Imagem</div>
       )}
@@ -1070,7 +1567,7 @@ export default function GameBoard() {
       >
         <Eye className="w-4 h-4" />
       </button>
-    </div>
+    </motion.div>
   );
   }
 
@@ -1126,15 +1623,10 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
   const globalRangedTraps = pRangedTraps + oRangedTraps;
 
 
-  const handleTargetEnemy = (enemyCard: Card) => {
-    if (!targetingAssassinSpy) return;
-    playCard(targetingAssassinSpy.spyCard, targetingAssassinSpy.targetRow, enemyCard);
-    setTargetingAssassinSpy(null);
-  };
 
   return (
 
-    <div className="h-full flex flex-col bg-[#0f0e0c] text-[#d4c3a1] font-serif select-none overflow-hidden">
+    <div className="h-full flex flex-col bg-[#0f0e0c] text-[#d4c3a1] font-serif select-none overflow-hidden" style={opponent?.profile?.coverUrl ? { backgroundImage: `linear-gradient(rgba(15, 14, 12, 0.85), rgba(15, 14, 12, 0.95)), url(${opponent.profile.coverUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : {}}>
       
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
         
@@ -1145,6 +1637,10 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               <button onClick={() => { navigate('/'); }} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-red-900/30 hover:bg-red-800 rounded flex items-center justify-center transition-colors w-full md:w-auto">
                  <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
                  <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Sair</span>
+              </button>
+              <button onClick={() => setShowAudioSettings(true)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto">
+                 <Volume2 className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
+                 <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest mt-1 md:mt-0">Áudio</span>
               </button>
               <button onClick={() => setIsChatOpen(!isChatOpen)} className="text-[#a67c52]/80 hover:text-white p-1.5 md:p-2 bg-[#3d3326]/30 hover:bg-[#3d3326]/50 rounded flex items-center justify-center transition-colors w-full md:w-auto relative">
                  <MessageSquare className="w-4 h-4 md:w-5 md:h-5 md:mr-1"/> 
@@ -1169,8 +1665,11 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
            </div>
 
           {/* Opponent Info */}
-          <div className="p-2 md:p-6 border-r md:border-r-0 md:border-b border-[#3d3326] bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="p-2 md:p-6 border-r md:border-r-0 md:border-b border-[#3d3326] bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+            {opponent?.profile?.coverUrl && (
+              <img src={opponent.profile.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-20 z-0" />
+            )}
+            <div className="flex items-center gap-2 mb-2 relative z-10">
               <div className="flex gap-1">
                 <div className={`w-2 h-2 rounded-full ${(opponent?.roundsWon || 0) >= 1 ? 'bg-[#e2b17a] shadow-[0_0_5px_#e2b17a]' : 'bg-[#3d3326]'}`}></div>
                 <div className={`w-2 h-2 rounded-full ${(opponent?.roundsWon || 0) >= 2 ? 'bg-[#e2b17a] shadow-[0_0_5px_#e2b17a]' : 'bg-[#3d3326]'}`}></div>
@@ -1188,19 +1687,52 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                 </h3>
               </div>
             </div>
-            <div className="text-3xl md:text-5xl font-black md:mt-2 text-[#d4c3a1]">{calculateScore(opponent!, me!)}</div>
-            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1 md:mt-4"><span className="hidden md:inline">Cartas: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.hand.length || 0}</span></div>
-            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1"><span className="hidden md:inline">Cemitério: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.graveyard?.length || 0}</span></div>
-            {opponent?.passed && <div className="absolute bottom-4 text-xs font-bold text-red-500 uppercase tracking-widest border border-red-500/50 bg-red-950/30 px-3 py-1 rounded">Passou</div>}
+            <div className="text-3xl md:text-5xl font-black md:mt-2 text-[#d4c3a1] relative z-10">{calculateScore(opponent!, me!)}</div>
+            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1 md:mt-4 relative z-10"><span className="hidden md:inline">Cartas: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.hand.length || 0}</span></div>
+            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mt-1 relative z-10"><span className="hidden md:inline">Cemitério: </span><span className="text-[#e2b17a] font-bold text-sm">{opponent?.graveyard?.length || 0}</span></div>
+            {opponent?.graveyard && opponent.graveyard.length > 0 && (
+               <div className="absolute top-1/2 -right-4 md:-right-8 w-12 h-16 md:w-16 md:h-24 bg-[#1a1814] border border-[#3d3326] rounded opacity-50 overflow-hidden transform -translate-y-1/2 scale-50 md:scale-75 cursor-pointer hover:opacity-100 hover:scale-75 md:hover:scale-100 transition-all z-20 shadow-lg flex items-center justify-center">
+                  <AnimatePresence>
+                     <motion.img 
+                        key={`opp-gy-${opponent.graveyard[opponent.graveyard.length - 1].id}`}
+                        src={opponent.graveyard[opponent.graveyard.length - 1].imageUrl}
+                        initial={{ opacity: 0, scale: 1.5, y: -20, rotate: 10 }}
+                        animate={{ opacity: 0.8, scale: 1, y: 0, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                        className="w-full h-full object-cover"
+                     />
+                  </AnimatePresence>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-xl">{opponent.graveyard.length}</div>
+               </div>
+            )}
+            {opponent?.passed && <div className="absolute bottom-4 text-xs font-bold text-red-500 uppercase tracking-widest border border-red-500/50 bg-red-950/30 px-3 py-1 rounded z-10">Passou</div>}
           </div>
 
           {/* Player Info */}
-          <div className="p-2 md:p-6 bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative">
-             {me?.passed && <div className="absolute top-4 text-xs font-bold text-red-500 uppercase tracking-widest border border-red-500/50 bg-red-950/30 px-3 py-1 rounded">Passou</div>}
-            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mb-1 md:mb-4"><span className="hidden md:inline">Baralho: </span><span className="text-[#e2b17a] font-bold text-sm">{me?.deck.length || 0}</span></div>
-            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mb-1 md:mb-4"><span className="hidden md:inline">Cemitério: </span><span className="text-[#e2b17a] font-bold text-sm">{me?.graveyard?.length || 0}</span></div>
-            <div className="text-3xl md:text-5xl font-black md:mb-2 text-[#d4c3a1]">{calculateScore(me!, opponent!)}</div>
-            <div className="flex items-center gap-2 mt-2">
+          <div className="p-2 md:p-6 bg-[#1a1814] flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+             {me?.profile?.coverUrl && (
+                <img src={me.profile.coverUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-20 z-0" />
+             )}
+             {me?.passed && <div className="absolute top-4 text-xs font-bold text-red-500 uppercase tracking-widest border border-red-500/50 bg-red-950/30 px-3 py-1 rounded z-10">Passou</div>}
+            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mb-1 md:mb-4 relative z-10"><span className="hidden md:inline">Baralho: </span><span className="text-[#e2b17a] font-bold text-sm">{me?.deck.length || 0}</span></div>
+            <div className="text-[10px] text-[#d4c3a1]/50 uppercase mb-1 md:mb-4 relative z-10"><span className="hidden md:inline">Cemitério: </span><span className="text-[#e2b17a] font-bold text-sm">{me?.graveyard?.length || 0}</span></div>
+            {me?.graveyard && me.graveyard.length > 0 && (
+               <div className="absolute top-1/2 -right-4 md:-right-8 w-12 h-16 md:w-16 md:h-24 bg-[#1a1814] border border-[#3d3326] rounded opacity-50 overflow-hidden transform -translate-y-1/2 scale-50 md:scale-75 cursor-pointer hover:opacity-100 hover:scale-75 md:hover:scale-100 transition-all z-20 shadow-lg flex items-center justify-center" onClick={() => setSelectedCardModal(me.graveyard[me.graveyard.length - 1])}>
+                  <AnimatePresence>
+                     <motion.img 
+                        key={`me-gy-${me.graveyard[me.graveyard.length - 1].id}`}
+                        src={me.graveyard[me.graveyard.length - 1].imageUrl}
+                        initial={{ opacity: 0, scale: 1.5, y: -20, rotate: -10 }}
+                        animate={{ opacity: 0.8, scale: 1, y: 0, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                        className="w-full h-full object-cover"
+                     />
+                  </AnimatePresence>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white font-bold text-xl">{me.graveyard.length}</div>
+               </div>
+            )}
+            <div className="text-3xl md:text-5xl font-black md:mb-2 text-[#d4c3a1] relative z-10">{calculateScore(me!, opponent!)}</div>
+            <div className="flex items-center gap-2 mt-2 relative z-10">
               
               <div className="flex flex-col items-center gap-2">
                 {me?.profile?.avatarUrl && (
@@ -1218,9 +1750,8 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                 <div className={`w-2 h-2 rounded-full ${(me?.roundsWon || 0) >= 2 ? 'bg-[#e2b17a] shadow-[0_0_5px_#e2b17a]' : 'bg-[#3d3326]'}`}></div>
               </div>
             </div>
-            
             {gameState.status === 'finished' && (
-              <div className="w-full mt-6 flex flex-col gap-2">
+              <div className="w-full mt-6 flex flex-col gap-2 relative z-10">
                 {gameState.isBotMatch ? (
                    <button 
                      onClick={requestRematch}
@@ -1250,8 +1781,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
               </div>
             )}
             {!me?.passed && gameState.status === 'playing' && (
-              <div className="w-full mt-6 flex flex-col gap-2">
-
+              <div className="w-full mt-6 flex flex-col gap-2 relative z-10">
                 <button 
                   onClick={passTurn}
                   disabled={!isMyTurn}
@@ -1261,6 +1791,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                 </button>
               </div>
             )}
+
           </div>
         </div>
 
@@ -1274,7 +1805,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                 {opponent?.board.scenario && (
                   <div className="min-h-[3.5rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-black/20 border border-white/5 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
                      <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold">0</div>
-                     {renderCard(opponent.board.scenario, 'opp-scen')}
+                     {renderCard(opponent.board.scenario, 'opp-scen', opponent.board.scenario.isFacedown ? () => activateTrap(opponent.board.scenario!, 'opponent', 'scenario') : undefined)}
                      <span className="absolute right-4 text-[10px] uppercase text-white/20 font-sans tracking-tighter">Cenário</span>
                   </div>
                 )}
@@ -1282,14 +1813,14 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold shadow-lg">
                      {getRowScore(opponent?.board.ranged || [], opponent?.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
-                   {opponent?.board.ranged.map((c, idx) => renderCard(c, `opp-r-${idx}`, targetingAssassinSpy && !c.effects?.includes('Herói') ? () => handleTargetEnemy(c) : undefined, getCardPoints(c, opponent.board.ranged, opponent.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}
+                   {/* updated opp ranged */}<AnimatePresence>{opponent?.board.ranged.map((c, idx) => renderCard(c, `opp-r-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'opponent', 'ranged') : (targetingAssassinSpy && !c.effects?.includes('Herói') ? () => handleTargetEnemy(c) : undefined), getCardPoints(c, opponent.board.ranged, opponent.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-white/20 font-sans tracking-tighter">Fila à Distância</span>
                 </div>
                 <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-black/20 border border-white/5 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={meleeBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${meleeBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#3d3326] rounded-full border border-[#a67c52] flex items-center justify-center text-xs font-bold shadow-lg">
                      {getRowScore(opponent?.board.melee || [], opponent?.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
-                   {opponent?.board.melee.map((c, idx) => renderCard(c, `opp-m-${idx}`, targetingAssassinSpy && !c.effects?.includes('Herói') ? () => handleTargetEnemy(c) : undefined, getCardPoints(c, opponent.board.melee, opponent.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}
+                   {/* updated opp melee */}<AnimatePresence>{opponent?.board.melee.map((c, idx) => renderCard(c, `opp-m-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'opponent', 'melee') : (targetingAssassinSpy && !c.effects?.includes('Herói') ? () => handleTargetEnemy(c) : undefined), getCardPoints(c, opponent.board.melee, opponent.board.scenario, me?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-white/20 font-sans tracking-tighter">Fila Corpo a Corpo</span>
                 </div>
              </div>
@@ -1302,20 +1833,20 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">
                       {getRowScore(me?.board.melee || [], me?.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
-                   {me?.board.melee.map((c, idx) => renderCard(c, `me-m-${idx}`, undefined, getCardPoints(c, me.board.melee, me.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}
+                   {/* updated me melee */}<AnimatePresence>{me?.board.melee.map((c, idx) => renderCard(c, `me-m-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'me', 'melee') : undefined, getCardPoints(c, me.board.melee, me.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Fila Corpo a Corpo</span>
                 </div>
                 <div className="min-h-[4.5rem] flex-1 sm:flex-none sm:h-28 md:h-36 bg-[#2d2922]/30 border border-[#a67c52]/20 rounded-sm flex items-center px-2 md:px-4 gap-1 md:gap-2 relative pl-6 md:pl-12" style={rangedBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${rangedBg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                    <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">
                       {getRowScore(me?.board.ranged || [], me?.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)}
                    </div>
-                   {me?.board.ranged.map((c, idx) => renderCard(c, `me-r-${idx}`, undefined, getCardPoints(c, me.board.ranged, me.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}
+                   {/* updated me ranged */}<AnimatePresence>{me?.board.ranged.map((c, idx) => renderCard(c, `me-r-${c.id}-${idx}`, c.isFacedown ? () => activateTrap(c, 'me', 'ranged') : undefined, getCardPoints(c, me.board.ranged, me.board.scenario, opponent?.board.scenario, globalMeleeBuffs, globalRangedBuffs, globalMeleeTraps, globalRangedTraps, allActiveCards)))}</AnimatePresence>
                    <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Fila à Distância</span>
                 </div>
                 {me?.board.scenario && (
                   <div className="min-h-[3.5rem] flex-1 sm:flex-none sm:h-20 md:h-24 bg-[#2d2922]/30 border border-[#a67c52]/20 flex items-center px-2 md:px-4 gap-1 md:gap-2 relative">
                      <div className="absolute left-0 md:left-[-10px] w-6 h-6 md:w-8 md:h-8 bg-[#a67c52] rounded-full border border-black flex items-center justify-center text-xs font-bold text-black shadow-[0_0_10px_rgba(166,124,82,0.5)]">0</div>
-                     {renderCard(me.board.scenario, 'me-scen')}
+                     {renderCard(me.board.scenario, 'me-scen', me.board.scenario.isFacedown ? () => activateTrap(me.board.scenario!, 'me', 'scenario') : undefined)}
                      <span className="absolute right-4 text-[10px] uppercase text-[#a67c52]/30 font-sans tracking-tighter font-bold">Cenário</span>
                   </div>
                 )}
@@ -1323,9 +1854,9 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
            </div>
 
           {/* Hand */}
-          <div className="h-28 sm:h-36 md:h-44 bg-[#1a1814] flex items-center md:items-center justify-start md:justify-center px-4 md:px-10 gap-2 border-t border-[#3d3326] shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-20 overflow-x-auto no-scrollbar relative shrink-0 w-full pt-4 md:pt-0">
+          <div className="h-36 sm:h-44 md:h-48 bg-[#1a1814] flex items-center md:items-center justify-start md:justify-center px-4 md:px-10 gap-2 border-t border-[#3d3326] shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-20 overflow-x-auto no-scrollbar relative shrink-0 w-full pt-4 md:pt-0">
              <div className="absolute left-4 bottom-full mb-1 md:mb-2 text-[10px] font-bold text-[#a67c52] uppercase tracking-widest drop-shadow-md">Sua Mão</div>
-             {me?.hand.map((card, idx) => {
+             <AnimatePresence>{me?.hand.map((card, idx) => {
                let targetRow: 'melee' | 'ranged' | 'scenario' | 'discard' = 'melee';
                if (card.type === 'Ranged') targetRow = 'ranged';
                if (card.type === 'Cenário' || card.type === 'Scenario' || card.effects?.includes('Clima')) targetRow = 'scenario';
@@ -1345,13 +1876,29 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
                  playCard(card, targetRow);
                };
                
-               return renderCard(card, `hand-${idx}`, onClick, undefined, 'hand');
-             })}
+               return renderCard(card, `hand-${card.id}-${idx}`, onClick, undefined, 'hand');
+             })}</AnimatePresence>
           </div>
         </div>
 
       </div>
       
+      <AnimatePresence>
+        {roundOverlay.show && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.5, filter: 'blur(10px)' }}
+            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+            className="fixed inset-0 pointer-events-none z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          >
+             <h1 className={`text-5xl md:text-8xl font-black uppercase tracking-[0.2em] ${roundOverlay.color} drop-shadow-[0_0_30px_rgba(0,0,0,1)] text-center`}>
+                {roundOverlay.message}
+             </h1>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {targetingAssassinSpy && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-pulse">
           <span className="font-bold uppercase tracking-widest text-xs">Selecione uma carta inimiga para destruir</span>
@@ -1368,6 +1915,7 @@ const globalMeleeBuffs = pMeleeBuffs + oMeleeBuffs;
           onClose={() => setIsChatOpen(false)} 
         />
       )}
+      {showAudioSettings && <AudioSettingsModal onClose={() => setShowAudioSettings(false)} />}
       {selectedCardModal && (
         <CardModal card={selectedCardModal} onClose={() => setSelectedCardModal(null)} />
       )}

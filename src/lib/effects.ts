@@ -1,0 +1,20 @@
+export const EFFECT_DESCRIPTIONS: Record<string, string> = {
+  'Espião': 'Jogue no campo inimigo. O valor da carta é adicionado aos pontos do oponente, mas você compra 2 cartas do seu baralho.',
+  'Espião Assassino': 'Jogue no campo inimigo. O valor da carta é adicionado aos pontos do oponente e destrói a carta normal mais forte do oponente, mas você compra 2 cartas do seu baralho.',
+  'Médico': 'Ao ser jogada, permite reviver uma carta do seu cemitério (exceto cartas de Herói ou Cartas Especiais) e jogá-la instantaneamente.',
+  'Herói': 'Esta carta é imune a quaisquer habilidades especiais, feitiços, efeitos de clima ou bônus/penalidades.',
+  'Comprar 1': 'Ao ser jogada, você compra imediatamente 1 carta do seu baralho.',
+  'Comprar 2': 'Ao ser jogada, você compra imediatamente 2 cartas do seu baralho.',
+  'Queimar': 'Ao ser jogada, destrói instantaneamente a(s) carta(s) com a força mais alta do campo de batalha (ambos os lados).',
+  'Impulso Moral': 'Aumenta em +1 a força de todas as outras unidades da mesma fila (não afeta Heróis).',
+  'Ladrão': 'Jogue no campo inimigo. O valor da carta é adicionado aos pontos do oponente e rouba uma carta aleatória da mão do oponente.',
+  'Dinheiro a Juros': 'Jogue no campo inimigo. O valor da carta é adicionado aos pontos do oponente, mas obriga o oponente a comprar e jogar a carta do topo do seu baralho imediatamente.',
+  'Vínculo Estreito': 'Dobra a força desta carta se houver outra carta com o mesmo nome na mesma fila.',
+  'Clima': 'Reduz a força de todas as unidades da fila afetada (em ambos os lados) para 1 ponto.',
+  'Buff de área melee': 'Concede +1 ponto de força a todas as cartas posicionadas na fileira de Combate Corpo a Corpo (Melee) em ambos os lados.',
+  'Buff de área ranged': 'Concede +1 ponto de força a todas as cartas posicionadas na fileira de Combate à Distância (Ranged) em ambos os lados.',
+  'Trap campo melee': 'Armadilha: Reduz pela metade (arredondado para cima) a força de todas as cartas na fileira de Combate Corpo a Corpo.',
+  'Trap campo Ranged': 'Armadilha: Reduz pela metade (arredondado para cima) a força de todas as cartas na fileira de Combate à Distância.',
+  'BUFF DE ESPECIFICO': 'Concede +1 de bônus contínuo a uma carta específica nomeada no campo de batalha.',
+  'DBUFF DE ESPECIFICO': 'Aplica -1 de penalidade contínua a uma carta específica nomeada no campo de batalha.'
+};

@@ -48,7 +48,7 @@ export function TradeModal({ tradeId, userData, onClose }: Props) {
           }
           
           if (data.status === 'completed') {
-             alert('Troca concluída com sucesso!');
+             console.log('Troca concluída com sucesso!');
              onClose();
           }
         } else {
@@ -135,7 +135,7 @@ export function TradeModal({ tradeId, userData, onClose }: Props) {
          }
        } catch (e) {
          console.error('Trade error', e);
-         alert('Erro ao concluir a troca.');
+         console.log('Erro ao concluir a troca.');
        }
     } else {
        await updateDoc(doc(db, 'trades', tradeId), {
@@ -171,7 +171,7 @@ export function TradeModal({ tradeId, userData, onClose }: Props) {
                      >
                         <div className="w-full aspect-[2/3] bg-[#1a1814] relative">
                           {card.imageUrl ? (
-                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-contain bg-black/50" />
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center p-1 text-center">
                               <span className="text-[10px] font-bold uppercase text-[#a67c52] leading-tight">{card.name}</span>
@@ -221,7 +221,7 @@ export function TradeModal({ tradeId, userData, onClose }: Props) {
                 {opponentCard ? (
                   <div className="w-32 aspect-[2/3] border-2 border-[#a67c52] rounded relative bg-[#1a1814]">
                     {opponentCard.imageUrl ? (
-                      <img src={opponentCard.imageUrl} alt={opponentCard.name} className="w-full h-full object-cover" />
+                      <img src={opponentCard.imageUrl} alt={opponentCard.name} className="w-full h-full object-contain bg-black/50" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
                         <span className="text-xs font-bold uppercase text-[#a67c52] leading-tight">{opponentCard.name}</span>

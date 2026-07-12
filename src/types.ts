@@ -8,6 +8,8 @@ export interface Card {
   points: number;
   imageUrl: string;
   backgroundUrl?: string;
+  backImageUrl?: string;
+  isFacedown?: boolean;
   effects: string[];
   buffTargetName?: string;
   debuffTargetName?: string;
@@ -19,6 +21,7 @@ export interface UserProfile {
   font?: string;
   color?: string;
   avatarUrl?: string;
+  coverUrl?: string;
 }
 
 export interface MatchRecord {
@@ -49,6 +52,34 @@ export interface User {
   friendRequests?: string[]; // array of UIDs that sent requests
   matchHistory?: MatchRecord[];
   hasAllCards?: boolean;
+  cruzeiros?: number;
+  tournamentProgress?: any;
+}
+
+export interface CardPackItem {
+  cardId: string;
+  weight: number; // probability weight
+}
+
+export interface CardPack {
+  id: string;
+  name: string;
+  imageUrl: string;
+  price: number;
+  cardsPerPack?: number;
+  cards: CardPackItem[];
+}
+
+export interface RewardsConfig {
+  botWin: number;
+  botDraw: number;
+  botLoss: number;
+  pvpWin: number;
+  pvpDraw: number;
+  pvpLoss: number;
+  tournamentWin: number;
+  tournamentDraw: number;
+  tournamentLoss: number;
 }
 
 export interface GamePlayerState {
@@ -87,7 +118,8 @@ export interface GameState {
   winner: string | null;
   isPrivate?: boolean;
   isBotMatch?: boolean;
-  botDifficulty?: 'easy' | 'normal' | 'hard' | 'expert';
+  campaignId?: string;
+  botDifficulty?: 'easy' | 'normal' | 'hard' | 'expert' | 'adaptive';
   isTutorial?: boolean;
   tutorialStep?: number;
   roomName?: string;
